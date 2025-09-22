@@ -65,7 +65,8 @@ uv pip install -U \
     'tqdm' \
     'tensorboard' \
     'jupyter' \
-    'ipykernel'
+    'ipykernel' \
+    'wikipedia-api'
 
 
 echo ">>> Installing build dependencies for flash-attn..."
@@ -84,14 +85,11 @@ uv pip install \
 
 uv pip install -U \
     --python "$VENV_NAME/bin/python" \
-    'vllm'
+    vllm trl unsloth numba
 
 uv pip install -U \
     --python "$VENV_NAME/bin/python" \
-    'trl'
-uv pip install -U \
-    --python "$VENV_NAME/bin/python" \
-    'numba'
+    -U xformers --index-url https://download.pytorch.org/whl/cu124
     
 echo ""
 echo "✅ Environment setup complete!"
