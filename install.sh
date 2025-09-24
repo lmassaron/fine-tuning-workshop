@@ -58,6 +58,7 @@ uv pip install -U \
 uv pip install -U \
     'protobuf' \
     'sentencepiece' \
+    'sentence_transformers' \
     'optuna' \
     'scikit-learn' \
     'pandas' \
@@ -66,8 +67,8 @@ uv pip install -U \
     'tensorboard' \
     'jupyter' \
     'ipykernel' \
-    'wikipedia-api'
-
+    'wikipedia-api' \
+    'tenacity'
 
 echo ">>> Installing build dependencies for flash-attn..."
 
