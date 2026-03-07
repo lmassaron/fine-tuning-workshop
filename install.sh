@@ -1,68 +1,123 @@
 #!/bin/bash
+# 
+# Installation script to set up the Python environment for the fine-tuning workshop
+# using uv (https://astral.sh/uv).
 #
-# Consolidated installation script to set up the Python environment for the
-# fine-tuning workshop notebooks using uv.
+# This script detects the OS (macOS vs. Linux) and GPU availability to optimize 
+# the installation of PyTorch and related libraries.
 
-set -e # Exit immediately if a command exits with a non-zero status.
+set -e # Exit on error
 
 VENV_NAME=".venv"
 PYTHON_VERSION="3.12"
 
-# Check if uv is available
+# 1. Check if uv is installed
 if ! command -v uv &> /dev/null; then
-    echo "Error: uv is not installed. Please install it from https://astral.sh/uv" >&2
+    echo "Error: uv is not installed. Please install it first (e.g., 'curl -LsSf https://astral.sh/uv/install.sh | sh')"
     exit 1
 fi
-echo ">>> Found uv version: $(uv --version)"
 
+# Detect OS and GPU
+OS_TYPE=$(uname -s)
+HAS_NVIDIA_GPU=false
+if command -v nvidia-smi &> /dev/null && nvidia-smi -L &> /dev/null; then
+    HAS_NVIDIA_GPU=true
+fi
 
-echo ">>> Creating virtual environment '$VENV_NAME' with Python >= $PYTHON_VERSION..."
-uv venv "$VENV_NAME" --python "$PYTHON_VERSION" --seed
+echo ">>> Detected OS: $OS_TYPE"
+echo ">>> NVIDIA GPU Found: $HAS_NVIDIA_GPU"
 
-echo ">>> Virtual environment created."
-echo ">>> Installing dependencies..."
+echo ">>> Creating virtual environment '$VENV_NAME' with Python $PYTHON_VERSION..."
+uv venv "$VENV_NAME" --python "$PYTHON_VERSION"
 
-# Install the main set of packages
-# Using a single block for better readability and management.
+echo ">>> Activating virtual environment and installing dependencies..."
+VENV_PYTHON="./$VENV_NAME/bin/python"
+
+# 2. Install core ML libraries based on hardware
+if [ "$OS_TYPE" == "Darwin" ]; then
+    echo ">>> Installing macOS-optimized (MPS/CPU) stack..."
+    # On macOS, we install standard torch (which includes MPS support)
+    uv pip install -U \
+        --python "$VENV_PYTHON" \
+        "torch" \
+        "torchvision" \
+        "transformers" \
+        "trl" \
+        "peft" \
+        "accelerate" \
+        "bitsandbytes" \
+        "datasets" \
+        "evaluate" \
+    
+    echo "⚠️  Note: 'xformers', 'unsloth', and 'vLLM' are primarily for Linux/CUDA and will be skipped on macOS."
+elif [ "$HAS_NVIDIA_GPU" = true ]; then
+    echo ">>> Installing Linux/CUDA-optimized (NVIDIA GPU) stack..."
+    # Install torch with CUDA 12.4 support
+    uv pip install -U \
+        --python "$VENV_PYTHON" \
+        --extra-index-url https://download.pytorch.org/whl/cu124 \
+        "torch" \
+        "torchvision" \
+        "xformers" \
+        "transformers" \
+        "trl" \
+        "peft" \
+        "accelerate" \
+        "bitsandbytes" \
+        "datasets" \
+        "evaluate"
+    
+    echo ">>> Installing Linux/GPU workshop tools (unsloth, vllm)..."
+    uv pip install -U \
+        --python "$VENV_PYTHON" \
+        "unsloth" \
+        "vllm"
+else
+    echo ">>> Installing standard Linux (CPU only) stack..."
+    uv pip install -U \
+        --python "$VENV_PYTHON" \
+        "torch" \
+        "torchvision" \
+        "transformers" \
+        "trl" \
+        "peft" \
+        "accelerate" \
+        "bitsandbytes" \
+        "datasets" \
+        "evaluate"
+    
+    echo "⚠️  Note: 'xformers', 'unsloth', and 'vLLM' require an NVIDIA GPU and will be skipped."
+fi
+
+# 3. Install data science and utility libraries (Common to all)
+echo ">>> Installing data science and utility libraries..."
 uv pip install -U \
-    --python "$VENV_NAME/bin/python" \
-    'torch' --extra-index-url https://download.pytorch.org/whl/cu124 \
-    'transformers[torch]' \
-    'trl[peft]' \
-    'datasets' \
-    'accelerate' \
-    'bitsandbytes' \
-    'evaluate' \
-    'sentencepiece' \
-    'sentence_transformers' \
-    'scikit-learn' \
-    'pandas' \
-    'numpy' \
-    'tqdm' \
-    'tensorboard' \
-    'jupyter' \
-    'ipykernel' \
-    'matplotlib' \
-    'wikipedia-api' \
-    'tenacity' \
-    'unsloth' \
-    'vllm' \
-    'synthetic-data-kit==0.0.3' \
-    'xformers' --extra-index-url https://download.pytorch.org/whl/cu124
+    --python "$VENV_PYTHON" \
+    "pandas" \
+    "numpy" \
+    "scikit-learn" \
+    "matplotlib" \
+    "tqdm" \
+    "tenacity" \
+    "sentencepiece" \
+    "sentence-transformers" \
+    "huggingface_hub" \
+    "wikipedia-api" \
+    "synthetic-data-kit"
 
-# Install build tools needed for flash-attn, then flash-attn itself.
-# This is kept for completeness, though notebook 03 will be modified not to use it.
-echo ">>> Installing flash-attn..."
-uv pip install \
-    --python "$VENV_NAME/bin/python" \
-    --upgrade wheel setuptools ninja
+# 4. Install Jupyter for notebook support
+echo ">>> Installing Jupyter..."
+uv pip install -U \
+    --python "$VENV_PYTHON" \
+    "jupyter" \
+    "ipykernel"
 
-uv pip install \
-    --python "$VENV_NAME/bin/python" \
-    flash-attn --no-build-isolation
+# Register the kernel
+"$VENV_PYTHON" -m ipykernel install --user --name "fine-tuning-workshop" --display-name "Python (Fine-Tuning Workshop)"
 
 echo ""
 echo "✅ Environment setup complete!"
-echo ""
-echo "To activate the virtual environment, run:"
+echo "To activate the environment, run:"
 echo "source $VENV_NAME/bin/activate"
+echo ""
+echo "You can then select the 'Python (Fine-Tuning Workshop)' kernel in your notebooks."
