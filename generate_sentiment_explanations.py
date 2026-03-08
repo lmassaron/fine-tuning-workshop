@@ -1,8 +1,8 @@
 """
 Generate reasoned financial sentiment explanations for FinancialPhraseBank dataset.
 
-Model: Qwen/Qwen2.5-7B-Instruct
-- Fits comfortably in RTX 3090 (24GB) in bfloat16 (~15GB VRAM)
+Model: Qwen/Qwen2.5-14B-Instruct
+- Fits comfortably in RTX 3090 (24GB) in nf4 (~11GB VRAM)
 - Strong instruction following and financial reasoning
 
 Output: HuggingFace dataset with original fields + 'explanation' column,
@@ -21,7 +21,7 @@ from transformers import BitsAndBytesConfig
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 
-MODEL_ID        = "Qwen/Qwen2.5-14B-Instruct"
+MODEL_ID        = "Qwen/Qwen2.5-14B-Instruct" # Use Qwen/Qwen2.5-7B-Instruct on Google Colab
 DATASET_ID      = "lmassaron/FinancialPhraseBank"
 OUTPUT_PATH     = "lmassaron/FinancialPhraseBank_explained"
 HF_REPO_ID      = None        # Set to "your-username/dataset-name" to push to Hub
