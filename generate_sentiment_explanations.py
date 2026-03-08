@@ -1,8 +1,8 @@
 """
 Generate reasoned financial sentiment explanations for FinancialPhraseBank dataset.
 
-Model: Qwen/Qwen2.5-14B-Instruct
-- Fits comfortably in RTX 3090 (24GB) in nf4 (~11GB VRAM)
+Model: Qwen/Qwen2.5-7B-Instruct
+- Fits comfortably in RTX 3090 (24GB) in nf4 (~6GB VRAM)
 - Strong instruction following and financial reasoning
 
 Output: HuggingFace dataset with original fields + 'explanation' column,
@@ -21,12 +21,12 @@ from transformers import BitsAndBytesConfig
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 
-MODEL_ID        = "Qwen/Qwen2.5-14B-Instruct" # Use Qwen/Qwen2.5-7B-Instruct on Google Colab
+MODEL_ID        = "Qwen/Qwen2.5-7B-Instruct"
 DATASET_ID      = "lmassaron/FinancialPhraseBank"
-OUTPUT_PATH     = "lmassaron/FinancialPhraseBank_explained"
-HF_REPO_ID      = None        # Set to "your-username/dataset-name" to push to Hub
-BATCH_SIZE      = 8           # Adjust down if you hit OOM
-MAX_NEW_TOKENS  = 300         # Enough for a concise but thorough explanation
+OUTPUT_PATH     = "FinancialPhraseBank_explained"
+HF_REPO_ID      = "lmassaron/FinancialPhraseBank_explained"        # Set to "your-username/dataset-name" to push to Hub
+BATCH_SIZE      = 16          # Adjust down if you hit OOM
+MAX_NEW_TOKENS  = 512         # Enough for a concise but thorough explanation
 QUANTIZATION_CONFIG = BitsAndBytesConfig(
     load_in_4bit=True,
     bnb_4bit_compute_dtype=torch.bfloat16,
@@ -70,12 +70,17 @@ def load_model(model_id: str):
         tokenizer.pad_token = tokenizer.eos_token
 
     model = AutoModelForCausalLM.from_pretrained(
-    model_id,
-    quantization_config=QUANTIZATION_CONFIG,
-    device_map="auto",
+        model_id,
+        quantization_config=QUANTIZATION_CONFIG,
+        device_map="auto",
+        low_cpu_mem_usage=True,
     )
     model.eval()
-    print(f"Model loaded. Device map: {model.hf_device_map}")
+    
+    # hf_device_map only exists with multi-device or quantized loading
+    device_info = getattr(model, "hf_device_map", None) or str(model.device)
+    print(f"Model loaded. Device: {device_info}")
+    
     return tokenizer, model
 
 # ── Inference ──────────────────────────────────────────────────────────────────
@@ -163,25 +168,24 @@ def main():
     raw = load_dataset(DATASET_ID)
     print(raw)
 
-    # Use the default split (the dataset has a single 'train' split)
-    split_name = list(raw.keys())[0]
-    data = raw[split_name]
-    print(f"  → {len(data)} examples in split '{split_name}'")
-
-    # 2. Load model
+    # 2. Load model once — reused across all splits
     tokenizer, model = load_model(MODEL_ID)
 
-    # 3. Generate explanations
-    results = process_dataset(tokenizer, model, data)
+    # 3. Process every split, preserving the original DatasetDict structure
+    output_splits = {}
+    for split_name, data in raw.items():
+        print(f"\n── Processing split: '{split_name}' ({len(data)} examples) ──")
+        results = process_dataset(tokenizer, model, data)
+        output_splits[split_name] = Dataset.from_list(results)
 
-    # 4. Build output dataset
-    explained_dataset = Dataset.from_list(results)
-    output_ds = DatasetDict({split_name: explained_dataset})
+    output_ds = DatasetDict(output_splits)
 
+    # 4. Print summary and one example
     print("\nOutput dataset:")
     print(output_ds)
-    print("\nExample:")
-    ex = output_ds[split_name][0]
+    first_split = list(output_splits.keys())[0]
+    ex = output_ds[first_split][0]
+    print(f"\nExample from '{first_split}':")
     print(f"  Sentence  : {ex['sentence']}")
     print(f"  Sentiment : {ex['sentiment']} (label={ex['label']})")
     print(f"  Explanation:\n    {ex['explanation']}")
@@ -195,7 +199,6 @@ def main():
         print(f"Pushing to Hub: {HF_REPO_ID}")
         output_ds.push_to_hub(HF_REPO_ID)
         print("Upload complete!")
-
 
 if __name__ == "__main__":
     main()
