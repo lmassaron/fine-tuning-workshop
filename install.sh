@@ -91,7 +91,7 @@ download_and_install_wheel() {
 # ==============================================================================
 
 # 1. Check if uv is installed
-if [ ! -x /home/lmassaron/.local/bin/uv ]; then
+if ! command -v uv &>/dev/null; then
     echo "Error: uv is not installed. Please install it first (e.g., 'curl -LsSf https://astral.sh/uv/install.sh | sh')"
     exit 1
 fi
