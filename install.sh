@@ -146,11 +146,23 @@ if [ "$OS_TYPE" == "Darwin" ]; then
         tar xf "$FILENAME"
         cd "vllm-$VLLM_V"
         
+        echo ">>> Installing build dependencies..."
+        uv pip install --python "$VENV_PYTHON" ninja cmake setuptools_scm grpcio-tools
+        
         echo ">>> Installing vLLM CPU requirements..."
         uv pip install --python "$VENV_PYTHON" setuptools numba
         
         echo ">>> Installing vLLM from source..."
-        uv pip install --python "$VENV_PYTHON" .
+        # Create symlinks to ensure ninja and cmake are findable
+        # VENV_PYTHON is already an absolute path, so extract the bin directory
+        VENV_BIN_DIR="$(dirname "$VENV_PYTHON")"
+        ln -sf /opt/homebrew/bin/ninja "$VENV_BIN_DIR/ninja"
+        ln -sf /opt/homebrew/bin/cmake "$VENV_BIN_DIR/cmake"
+        
+        # Set comprehensive environment for the build
+        export PATH="$VENV_BIN_DIR:/opt/homebrew/bin:$PATH"
+        export CMAKE_MAKE_PROGRAM="$VENV_BIN_DIR/ninja"
+        export CMAKE_GENERATOR="Ninja"
         
         cd ..
         rm -rf "vllm-$VLLM_V"*
