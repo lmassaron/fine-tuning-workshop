@@ -2,53 +2,63 @@
 
 This project provides a hands-on workshop for fine-tuning large language models (LLMs). It demonstrates a complete workflow, from evaluating a base model to generating a synthetic dataset, fine-tuning the model, and evaluating its improved performance. The primary example focuses on creating a Sherlock Holmes expert model, with an additional example of sentiment analysis in the financial domain.
 
+## Compatibility and Hardware Requirements
+
+The examples in this repository are optimized for the following environments:
+
+*   **NVIDIA GPU systems**: 16GB VRAM or more (e.g., RTX 3090/4080, A10/L4).
+*   **Google Colab**: Compatible with the free **T4 GPU** tier.
+*   **macOS (Apple Silicon)**: M-series chips with at least **16GB of unified memory**.
+
 ## Workflow
 
 The project is divided into five Jupyter notebooks, each covering a specific step in the fine-tuning process:
 
-1.  **`01_knowledge_evaluation.ipynb`**: Evaluates the baseline knowledge of a pre-trained language model on a specific domain (Sherlock Holmes).
-2.  **`02_synthetic_data_preparation.ipynb`**: Generates a synthetic dataset of questions and answers about Sherlock Holmes to be used for fine-tuning.
-3.  **`03_fine_tuning_QA.ipynb`**: Fine-tunes the language model on the synthetic dataset to enhance its domain-specific knowledge.
-4.  **`04_knowledge_evaluation_final.ipynb`**: Evaluates the fine-tuned model to measure the improvement in its knowledge and performance.
-5.  **`05_fine_tuning_sentiment.ipynb`**: Provides an additional example of fine-tuning a model for sentiment analysis on financial news.
+1.  **`01_knowledge_evaluation.ipynb`**: Evaluates the baseline knowledge of a pre-trained language model (e.g., Gemma-2b) on a specific domain (Sherlock Holmes).
+2.  **`02_synthetic_data_preparation.ipynb`**: Demonstrates a full pipeline to scrape Wikipedia, and use `synthetic-data-kit` (backed by a local vLLM server) to generate and curate a high-quality QA dataset.
+3.  **`03_fine_tuning_QA.ipynb`**: Performs Supervised Fine-Tuning (SFT) using QLoRA to enhance the model's domain-specific knowledge while staying within memory constraints.
+4.  **`04_knowledge_evaluation_final.ipynb`**: Re-evaluates the fine-tuned model to measure the improvement in its knowledge and performance compared to the baseline.
+5.  **`05_fine_tuning_sentiment.ipynb`**: Provides an additional example of fine-tuning for sentiment analysis on financial news headlines.
 
 ## Getting Started
 
-To run the notebooks in this project, you need to have Python and Jupyter Notebook installed. You will also need to install the required libraries, which can be done by running the `install.sh` script:
+To run the notebooks, ensure you have a compatible environment. You can install the necessary dependencies using the provided script:
 
 ```bash
 sh install.sh
 ```
 
-## Notebooks
+## Notebook Details
 
 ### 1. `01_knowledge_evaluation.ipynb`
 
-This notebook evaluates the baseline knowledge of a pre-trained language model on the Sherlock Holmes domain. It uses a series of questions to test the model's ability to answer correctly and measures its performance using various metrics, including keyword matching, semantic similarity, and an AI-based judge.
+Tests the baseline model's ability to answer domain-specific questions. It uses metrics like keyword matching, semantic similarity (using `sentence-transformers`), and an LLM-based judge to establish a performance floor.
 
 ### 2. `02_synthetic_data_preparation.ipynb`
 
-This notebook demonstrates how to create a synthetic dataset for fine-tuning. It scrapes Wikipedia for information about Sherlock Holmes, processes the text, and then uses a language model to generate question-and-answer pairs. This synthetic dataset is then used to fine-tune the model.
+Automates the creation of a fine-tuning dataset:
+- **Scrape**: Extracts clean text from Sherlock Holmes-related Wikipedia articles.
+- **Generate**: Uses `synthetic-data-kit` to produce question-answer pairs.
+- **Curate**: Filters out low-quality examples using an AI judge.
+- **Format**: Prepares the data for conversation-style fine-tuning.
 
 ### 3. `03_fine_tuning_QA.ipynb`
 
-This notebook covers the fine-tuning process. It uses the synthetic dataset created in the previous step to fine-tune the pre-trained language model. The notebook demonstrates how to use the Hugging Face `transformers` and `trl` libraries to perform supervised fine-tuning.
+Covers the actual training process. It leverages Hugging Face's `transformers`, `peft`, and `trl` libraries to apply Parameter-Efficient Fine-Tuning (PEFT) with LoRA/QLoRA, making it possible to train on consumer-grade hardware or free cloud instances.
 
 ### 4. `04_knowledge_evaluation_final.ipynb`
 
-This notebook evaluates the fine-tuned model's performance. It uses the same evaluation metrics as the first notebook to measure the improvement in the model's knowledge and accuracy.
+Validates the success of the fine-tuning. By running the same battery of tests as the first notebook, it quantifies the "knowledge gain" and improvement in response quality.
 
 ### 5. `05_fine_tuning_sentiment.ipynb`
 
-This notebook provides a second example of fine-tuning a language model, this time for sentiment analysis. It uses a dataset of financial news headlines to fine-tune a model to classify the sentiment as positive, negative, or neutral.
+A transfer learning example focusing on classification. It adapts a language model to identify sentiment (positive, negative, neutral) in financial headlines, demonstrating the versatility of fine-tuning.
 
 ## Results
 
-The project demonstrates a significant improvement in the model's knowledge and performance after fine-tuning. The fine-tuned model is able to answer questions about Sherlock Holmes with much higher accuracy than the base model. The sentiment analysis example also shows that fine-tuning can be used to adapt a language model to a specific task and domain.
+The workshop demonstrates how a relatively small amount of high-quality synthetic data (curated from reliable sources like Wikipedia) can significantly boost a model's performance in a niche domain.
 
-The evaluation results from the notebooks show the following improvements:
-
-*   **Keyword Matching Accuracy**: The fine-tuned model shows a significant improvement in its ability to generate answers that contain the correct keywords.
-*   **Semantic Similarity Accuracy**: The fine-tuned model's answers are more semantically similar to the expected answers.
-*   **AI Judge Accuracy**: The fine-tuned model's answers are judged to be more accurate by an AI-based evaluator.
-*   **Perplexity**: The fine-tuned model has a lower perplexity, indicating that it is more confident in its answers.
+Key improvements typically observed:
+*   **Higher Accuracy**: More frequent correct answers to factual questions.
+*   **Better Alignment**: Responses follow the desired format and tone.
+*   **Reduced Hallucination**: The model stays closer to the provided domain knowledge.
