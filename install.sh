@@ -187,13 +187,52 @@ if [ "$OS_TYPE" == "Darwin" ]; then
 
 elif [ "$HAS_NVIDIA_GPU" = true ]; then
     echo ">>> Installing Linux/CUDA-optimized (NVIDIA GPU) stack..."
-    # Install torch with CUDA 12.4 support
+    
+    # 1. Detect maximum supported CUDA version from nvidia-smi's output
+    CUDA_VERSION_STRING=$(nvidia-smi | grep "CUDA Version" | sed -n 's/.*CUDA Version: \([0-9\.]*\).*/\1/p')
+    echo ">>> Detected maximum supported CUDA Version: $CUDA_VERSION_STRING"
+    
+    CUDA_MAJOR=$(echo "$CUDA_VERSION_STRING" | cut -d. -f1)
+    CUDA_MINOR=$(echo "$CUDA_VERSION_STRING" | cut -d. -f2)
+    
+    # Detect System Architecture
+    ARCH=$(uname -m)
+    echo ">>> Detected Architecture: $ARCH"
+    
+    # 2. Map system CUDA version and Architecture to the supported PyTorch package
+    if [ "$ARCH" = "aarch64" ]; then
+        echo ">>> ARM64 (aarch64) detected. PyTorch requires at least cu128 for ARM+CUDA."
+        PT_CU_VERSION="cu128"
+    else
+        # Standard x86_64 logic
+        if [ "$CUDA_MAJOR" -ge 13 ]; then
+            PT_CU_VERSION="cu128"
+        elif [ "$CUDA_MAJOR" -eq 12 ]; then
+            if [ "$CUDA_MINOR" -ge 8 ]; then           # FIX 1: added space after `if`
+                PT_CU_VERSION="cu128"
+            elif [ "$CUDA_MINOR" -ge 4 ]; then
+                PT_CU_VERSION="cu124"
+            elif [ "$CUDA_MINOR" -ge 1 ]; then
+                PT_CU_VERSION="cu121"
+            else
+                PT_CU_VERSION="cu118"
+            fi
+        elif [ "$CUDA_MAJOR" -eq 11 ] && [ "$CUDA_MINOR" -ge 8 ]; then   # FIX 2: added space before `[`
+            PT_CU_VERSION="cu118"
+        else
+            echo "⚠️  Unsupported/Old CUDA version detected ($CUDA_VERSION_STRING)."
+            PT_CU_VERSION="cu118"
+        fi
+    fi
+
+    echo ">>> Selected PyTorch CUDA index: $PT_CU_VERSION"
+    
+    # 3. Install PyTorch using the dynamically selected index
     uv pip install -U \
         --python "$VENV_PYTHON" \
-        --extra-index-url https://download.pytorch.org/whl/cu124 \
+        --extra-index-url "https://download.pytorch.org/whl/$PT_CU_VERSION" \
         "torch" \
         "torchvision" \
-        "xformers" \
         "transformers" \
         "trl" \
         "peft" \
@@ -202,11 +241,17 @@ elif [ "$HAS_NVIDIA_GPU" = true ]; then
         "datasets" \
         "evaluate"
     
-    echo ">>> Installing Linux/GPU workshop tools (unsloth, vllm)..."
+    echo ">>> Installing Linux/GPU workshop tools..."
+    # 4. Install specialized workshop tools
+    # FIX 3: Removed the ARM64 block that incorrectly skipped unsloth.
+    # Unsloth no longer strictly requires xformers — it falls back to its own
+    # Triton kernels when xformers is unavailable, making it fully compatible
+    # with ARM64+CUDA systems such as the NVIDIA DGX Spark (GB10/GH200).
     uv pip install -U \
         --python "$VENV_PYTHON" \
         "unsloth" \
         "vllm"
+
 else
     echo ">>> Installing standard Linux (CPU only) stack..."
     uv pip install -U \
