@@ -10,7 +10,7 @@
 set -e # Exit on error
 
 VENV_NAME=".venv"
-PYTHON_VERSION="3.12"
+PYTHON_VERSION="3.12.13"
 
 # ==============================================================================
 # Helper Functions for macOS vllm-metal Installation
