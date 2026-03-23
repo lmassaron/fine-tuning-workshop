@@ -202,11 +202,11 @@ elif [ "$HAS_NVIDIA_GPU" = true ]; then
     # 2. Map system CUDA version and Architecture to the supported PyTorch package
     if [ "$ARCH" = "aarch64" ]; then
         echo ">>> ARM64 (aarch64) detected. PyTorch requires at least cu128 for ARM+CUDA."
-        PT_CU_VERSION="cu128"
+        PT_CU_VERSION="cu130"
     else
         # Standard x86_64 logic
         if [ "$CUDA_MAJOR" -ge 13 ]; then
-            PT_CU_VERSION="cu128"
+            PT_CU_VERSION="cu130"
         elif [ "$CUDA_MAJOR" -eq 12 ]; then
             if [ "$CUDA_MINOR" -ge 8 ]; then           # FIX 1: added space after `if`
                 PT_CU_VERSION="cu128"
