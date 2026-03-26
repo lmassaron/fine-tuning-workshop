@@ -21,17 +21,17 @@ from transformers import BitsAndBytesConfig
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 
-MODEL_ID        = "Qwen/Qwen2.5-7B-Instruct"
-DATASET_ID      = "lmassaron/FinancialPhraseBank"
-OUTPUT_PATH     = "FinancialPhraseBank_explained"
-HF_REPO_ID      = "lmassaron/FinancialPhraseBank_explained"        # Set to "your-username/dataset-name" to push to Hub
-BATCH_SIZE      = 16          # Adjust down if you hit OOM
-MAX_NEW_TOKENS  = 512         # Enough for a concise but thorough explanation
+MODEL_ID = "Qwen/Qwen2.5-7B-Instruct"
+DATASET_ID = "lmassaron/FinancialPhraseBank"
+OUTPUT_PATH = "FinancialPhraseBank_explained"
+HF_REPO_ID = "lmassaron/FinancialPhraseBank_explained"  # Set to "your-username/dataset-name" to push to Hub
+BATCH_SIZE = 16  # Adjust down if you hit OOM
+MAX_NEW_TOKENS = 512  # Enough for a concise but thorough explanation
 QUANTIZATION_CONFIG = BitsAndBytesConfig(
     load_in_4bit=True,
     bnb_4bit_compute_dtype=torch.bfloat16,
-    bnb_4bit_use_double_quant=True,   # saves a bit more memory
-    bnb_4bit_quant_type="nf4",        # best quality for 4-bit
+    bnb_4bit_use_double_quant=True,  # saves a bit more memory
+    bnb_4bit_quant_type="nf4",  # best quality for 4-bit
 )
 
 LABEL_MAP = {
@@ -52,16 +52,19 @@ SYSTEM_PROMPT = (
     "Be concise and precise. Do not repeat the sentence verbatim."
 )
 
+
 def build_prompt(sentence: str, sentiment: str) -> str:
     return (
-        f"Financial news headline:\n\"{sentence}\"\n\n"
+        f'Financial news headline:\n"{sentence}"\n\n'
         f"This headline has been classified as **{sentiment}** sentiment "
         f"from a financial markets perspective.\n\n"
         f"Explain why, focusing on the financial implications for investors, "
         f"the company, or the broader market."
     )
 
+
 # ── Model loading ──────────────────────────────────────────────────────────────
+
 
 def load_model(model_id: str):
     print(f"Loading tokenizer and model: {model_id}")
@@ -76,14 +79,16 @@ def load_model(model_id: str):
         low_cpu_mem_usage=True,
     )
     model.eval()
-    
+
     # hf_device_map only exists with multi-device or quantized loading
     device_info = getattr(model, "hf_device_map", None) or str(model.device)
     print(f"Model loaded. Device: {device_info}")
-    
+
     return tokenizer, model
 
+
 # ── Inference ──────────────────────────────────────────────────────────────────
+
 
 def generate_explanations_batch(
     tokenizer,
@@ -98,7 +103,7 @@ def generate_explanations_batch(
         tokenizer.apply_chat_template(
             [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user",   "content": build_prompt(s, LABEL_MAP[l])},
+                {"role": "user", "content": build_prompt(s, LABEL_MAP[l])},
             ],
             tokenize=False,
             add_generation_prompt=True,
@@ -118,7 +123,7 @@ def generate_explanations_batch(
         outputs = model.generate(
             **inputs,
             max_new_tokens=MAX_NEW_TOKENS,
-            do_sample=False,          # greedy — deterministic and fast
+            do_sample=False,  # greedy — deterministic and fast
             temperature=1.0,
             pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.eos_token_id,
@@ -137,12 +142,12 @@ def process_dataset(tokenizer, model, dataset) -> list[dict]:
     """Iterate over the dataset in batches, collecting results."""
     results = []
     sentences = dataset["sentence"]
-    labels    = dataset["label"]
-    n         = len(sentences)
+    labels = dataset["label"]
+    n = len(sentences)
 
     for start in tqdm(range(0, n, BATCH_SIZE), desc="Generating explanations"):
         batch_sentences = sentences[start : start + BATCH_SIZE]
-        batch_labels    = labels[start    : start + BATCH_SIZE]
+        batch_labels = labels[start : start + BATCH_SIZE]
 
         explanations = generate_explanations_batch(
             tokenizer, model, batch_sentences, batch_labels
@@ -151,16 +156,20 @@ def process_dataset(tokenizer, model, dataset) -> list[dict]:
         for sentence, label, explanation in zip(
             batch_sentences, batch_labels, explanations
         ):
-            results.append({
-                "sentence":    sentence,
-                "label":       label,
-                "sentiment":   LABEL_MAP[label],
-                "explanation": explanation,
-            })
+            results.append(
+                {
+                    "sentence": sentence,
+                    "label": label,
+                    "sentiment": LABEL_MAP[label],
+                    "explanation": explanation,
+                }
+            )
 
     return results
 
+
 # ── Main ───────────────────────────────────────────────────────────────────────
+
 
 def main():
     # 1. Load dataset
@@ -199,6 +208,7 @@ def main():
         print(f"Pushing to Hub: {HF_REPO_ID}")
         output_ds.push_to_hub(HF_REPO_ID)
         print("Upload complete!")
+
 
 if __name__ == "__main__":
     main()

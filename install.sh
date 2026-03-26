@@ -256,9 +256,9 @@ else
     echo ">>> Installing standard Linux (CPU only) stack..."
     uv pip install -U \
         --python "$VENV_PYTHON" \
+        "transformers" \
         "torch" \
         "torchvision" \
-        "transformers" \
         "trl" \
         "peft" \
         "accelerate" \
