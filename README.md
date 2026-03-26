@@ -27,7 +27,7 @@ The project is divided into seven Jupyter notebooks, organized into two tracks:
 ### Track 2: Reasoned Financial Sentiment (Reasoning & Classification)
 5.  **`05_generate_sentiment_explanations.ipynb`**: Uses a powerful teacher model (**Qwen 2.5 7B**) to generate financial explanations for the FinancialPhraseBank dataset.
 6.  **`06_fine_tuning_sentiment.ipynb`**: Fine-tunes **Gemma 3 1B** to predict both sentiment and the underlying financial reasoning (CoT).
-7.  **`07_sft_evaluation.ipynb`**: Evaluates the sentiment model on accuracy, instruction following (tags), and reasoning quality (LLM-as-a-judge).
+7.  **`07_sentiment_evaluation.ipynb`**: Evaluates the sentiment model on accuracy, instruction following (tags), and reasoning quality (LLM-as-a-judge).
 
 ## Getting Started
 
@@ -57,7 +57,7 @@ Moves beyond simple labels. It "distills" financial expertise from a 7B paramete
 ### 6. `06_fine_tuning_sentiment.ipynb`
 Trains the smaller Gemma 3 1B model to think before it classifies. By learning to generate explanations, the model becomes more robust and transparent in its predictions.
 
-### 7. `07_sft_evaluation.ipynb`
+### 7. `07_sentiment_evaluation.ipynb`
 A deep dive into model validation. It uses a "Judge Model" to grade the quality of generated reasoning, ensuring the fine-tuned model isn't just getting the right answer for the wrong reasons.
 
 ## Results
