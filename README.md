@@ -31,7 +31,9 @@ The project is divided into seven Jupyter notebooks, organized into two tracks:
 
 ## Getting Started
 
-To run the notebooks, ensure you have a compatible environment. You can install the necessary dependencies using the provided script:
+To run the notebooks, ensure you have a compatible environment. It is also necessary to have a Hugging Face account and to accept the Google Gemma model licence. For detailed, step-by-step assistance, please refer to the `hugging_face_setup_guide.pdf` included in this repository. 
+
+You can install the necessary dependencies using the provided script:
 
 ```bash
 sh install.sh
