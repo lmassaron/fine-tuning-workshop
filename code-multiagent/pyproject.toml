@@ -1,0 +1,26 @@
+[project]
+name = "code-multiagent"
+version = "0.1.0"
+description = "Local Coding Multi-Agent System with Dynamic LoRA Hot-Swapping"
+readme = "tutorial.md"
+requires-python = ">=3.12"
+dependencies = [
+    "torch",
+    "torchvision",
+    "torchaudio",
+    "unsloth",
+    "transformers",
+    "accelerate",
+    "bitsandbytes",
+    "peft",
+    "datasets",
+    "trl",
+    "xformers"
+]
+
+[tool.uv]
+index-url = "https://pypi.org/simple"
+extra-index-url = ["https://download.pytorch.org/whl/cu130"]
+
+[tool.uv.sources]
+unsloth = { git = "https://github.com/unslothai/unsloth.git", extras = ["colab-new"] }
