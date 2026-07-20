@@ -39,7 +39,7 @@ Standard classification prompts often fail to capture subtle economic implicatio
 We utilize the `lmassaron/FinancialPhraseBank_explained` dataset, which enriches human-curated financial headlines with LLM-generated explanations. The dataset includes pre-split `'train'`, `'validation'`, and `'test'` splits.
 
 ### B. Notebook Architecture & Cells
-The notebook [financial_sentiment_cot.ipynb](file:///home/lmassaron/code/sft-examples/temp_workshop/financial_sentiment_cot.ipynb) is structured as follows:
+The notebook [financial_sentiment_cot.ipynb](file:///home/lmassaron/code/sft-examples/financial_sentiment_cot.ipynb) is structured as follows:
 - **Cell 1-2**: Import libraries and detect CUDA environment configurations.
 - **Cell 3**: Load the dataset from the Hugging Face Hub, renaming columns to `'text'` and `'reasoning'`.
 - **Cell 4**: Format conversation prompts using the model's native chat template. The system prompt instructs the model to reply using `<sentiment>` and `<reasoning>` tags:
@@ -83,7 +83,7 @@ weighted avg       0.87      0.82      0.84       484
 Adapting LLMs to specialized medical contexts requires highly aligned knowledge extraction. We utilize the `lmassaron/medical-cardiology-qa` dataset, which contains doctor-patient dialogues on pathophysiology, diagnostic criteria, and treatment protocols. We split the dataset 90% for training and 10% for validation.
 
 ### B. Notebook Architecture & Cells
-The notebook [medical_expert_cardiology.ipynb](file:///home/lmassaron/code/sft-examples/temp_workshop/medical_expert_cardiology.ipynb) utilizes the **Unsloth** library to accelerate training:
+The notebook [medical_expert_cardiology.ipynb](file:///home/lmassaron/code/sft-examples/medical_expert_cardiology.ipynb) utilizes the **Unsloth** library to accelerate training:
 - **Cell 1**: Import `unsloth` at the very beginning to load optimized kernels before importing PyTorch or Hugging Face.
 - **Cell 2-3**: Load Microsoft's `unsloth/Phi-4-mini-instruct` in 4-bit quantization. Enable QLoRA adapters with `FastLanguageModel.get_peft_model`.
 - **Cell 4**: Apply a custom format function mapping dialogues to chat template strings.
@@ -93,7 +93,7 @@ The notebook [medical_expert_cardiology.ipynb](file:///home/lmassaron/code/sft-e
 ### C. Perplexity Evaluation & Results
 Perplexity measures the exponential of the cross-entropy loss calculated exclusively on the doctor's response tokens (masking out prompt tokens with `-100` label values):
 
-$$PPL = \exp\left( - \frac{1}{N} \sum_{i=1}^{N} \log P(y_i \mid x, y_{<i}) \right)$$
+$$PPL = \exp\left( - \frac{1}{N} \sum_{i=1}^{N} \log P(y_i \mid x, y_{\lt i}) \right)$$
 
 Training over 100 steps resulted in a low validation perplexity:
 - **Average Evaluation Perplexity**: **4.4341**
@@ -118,7 +118,7 @@ $$h = [ \text{Proj}(\text{ViT}(x_{\text{image}})) ; x_{\text{text}} ]$$
 We freeze the vision transformer to preserve generic visual features and train the projections and language attention modules using QLoRA.
 
 ### B. Notebook Architecture & Cells
-The notebook [vision_finetuning_latex.ipynb](file:///home/lmassaron/code/sft-examples/temp_workshop/vision_finetuning_latex.ipynb) implements handwritten-to-LaTeX transcription:
+The notebook [vision_finetuning_latex.ipynb](file:///home/lmassaron/code/sft-examples/vision_finetuning_latex.ipynb) implements handwritten-to-LaTeX transcription:
 - **Cell 1**: Import the `FastVisionModel` class from Unsloth.
 - **Cell 2**: Load the lightweight `unsloth/Qwen2-VL-2B-Instruct` model and initialize vision and language adapters.
 - **Cell 3**: Load the `unsloth/LaTeX_OCR` dataset. Map the dataset into a conversational format. Crucially, PIL Images must be passed in a separate `images` column to prevent Hugging Face `datasets` from serializing nested images into invalid dictionaries:
