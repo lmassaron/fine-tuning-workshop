@@ -164,6 +164,23 @@ After training for 30 steps, the model successfully generalized from handwritten
 
 ### D. Purpose of Fine-Tuning & Model Capabilities
 - **Purpose of Fine-Tuning**: General-purpose Vision-Language Models (VLMs) can write general image captions, but they fail to transcribe handwritten mathematical equations into compilable LaTeX code due to structural complexity (fractions, subscripts, and nested brackets). Fine-tuning maps visual features of mathematical symbols and layouts to valid LaTeX syntax sequences.
+  
+  **What this means in practice**: You can capture a photo of a whiteboard, a scan of a handwritten calculation page, or a cropped screenshot of a digital math book, and the fine-tuned model will transcribe that visual image directly into clean, compilable, and renderable LaTeX code.
+  
+  #### Concrete OCR Translation Examples:
+  
+  *   **Example 1: Basic Integration Photo**
+      *   *Visual Input*: A photo of an integration equation on paper: $\int_a^b f(x) \, dx$
+      *   *Model LaTeX Output*: `\int_{a}^{b} f(x) \, dx`
+  
+  *   **Example 2: Complex Fractions and Roots**
+      *   *Visual Input*: A handwritten math note showing the quadratic formula: $x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$
+      *   *Model LaTeX Output*: `x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}`
+  
+  *   **Example 3: Quantum Mechanical Matrices**
+      *   *Visual Input*: A photo of a chalkboard matrix calculation: $\sigma_z = \begin{pmatrix} 1 & 0 \\ 0 & -1 \end{pmatrix}$
+      *   *Model LaTeX Output*: `\sigma_z = \begin{pmatrix} 1 & 0 \\ 0 & -1 \end{pmatrix}`
+
 - **Capabilities of the Fine-Tuned Model**:
   - **Handwritten Mathematical OCR**: Directly translates image inputs of complex handwritten mathematical symbols into compilable LaTeX equations.
   - **Mathematical Semantic Generalization**: Learns semantic equivalencies of LaTeX notation (e.g., outputting `\dagger` instead of the literal reference `\dag` based on context), demonstrating true mathematical syntax generalization.
