@@ -81,6 +81,24 @@ weighted avg       0.87      0.82      0.84       484
   - **Structured Chain-of-Thought Reasoning**: Consistently generates logical financial rationales inside `<reasoning>` tags prior to deciding on a sentiment.
   - **Strict Format Adherence**: Achieves over 94% tag integrity without requiring external regex parsers or JSON schema validators.
   - **Specialized Financial Sentiment Classification**: Outperforms base models by distinguishing subtle financial statements (e.g., classifying conservative corporate earnings guidance as neutral/positive).
+  
+  #### Concrete CoT Classification Examples:
+  
+  *   **Example 1: Positive Corporate Growth**
+      *   *Input Headline*: `"Finnish technology group Wartsila has won a contract to supply a 50 MW power plant to El Salvador, representing a major entry into Central America."`
+      *   *Model Structured Output*:
+          ```xml
+          <sentiment>positive</sentiment>
+          <reasoning>The contract to supply a 50 MW power plant in El Salvador represents a significant new business deal and a strategic entry into the Central American market for Wartsila, indicating positive growth prospects.</reasoning>
+          ```
+  
+  *   **Example 2: Negative Financial Downturn**
+      *   *Input Headline*: `"Operating profit fell to EUR 3.2 million from EUR 5.8 million in the corresponding period of the previous year."`
+      *   *Model Structured Output*:
+          ```xml
+          <sentiment>negative</sentiment>
+          <reasoning>A drop in operating profit from EUR 5.8 million to EUR 3.2 million compared to the previous year represents a clear decline in financial performance and profitability.</reasoning>
+          ```
 
 ---
 
@@ -118,6 +136,29 @@ Training over 100 steps resulted in a low validation perplexity:
 - **Capabilities of the Fine-Tuned Model**:
   - **Cardiology Domain Expert**: Highly coherent generation of complex cardiology concepts (e.g., Marfan/Ehlers-Danlos syndromes, aortic dissection, myocardial infarction pathways) with low perplexity (4.43).
   - **Clinical Style Alignment**: Adopts a precise, structured dialogue format matching professional physician-to-patient or peer-to-peer discussions.
+  
+  #### Concrete Cardiology Expert Dialogue Examples:
+  
+  *   **Example 1: Diagnostic ECG Interpretation**
+      *   *Input Question*: `"What are the characteristic ECG findings during an acute anteroseptal myocardial infarction?"`
+      *   *Model Cardiology Output*:
+          ```
+          In an acute anteroseptal myocardial infarction, the characteristic ECG findings include:
+          1. ST-segment elevation in leads V1, V2, and V3.
+          2. Reciprocal ST-segment depression in inferior leads (II, III, aVF) may be present.
+          3. Progression to pathological Q waves in V1-V3 as myocardial necrosis completes.
+          4. T-wave inversion in the affected leads during the evolutionary phase.
+          ```
+  
+  *   **Example 2: Congenital Pathology Association**
+      *   *Input Question*: `"Which congenital heart defect is most commonly associated with Turner syndrome?"`
+      *   *Model Cardiology Output*:
+          ```
+          Turner syndrome is most frequently associated with:
+          1. Coarctation of the aorta (occurring in up to 15-20% of patients).
+          2. Bicuspid aortic valve (present in approximately 30% of cases).
+          These anomalies require regular cardiovascular surveillance, specifically echocardiography or cardiac MRI, to monitor for progressive aortic root dilation or dissection.
+          ```
 
 ---
 
