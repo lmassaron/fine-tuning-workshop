@@ -1,51 +1,158 @@
-# Fine-Tuning Language Models Workshop
+# Book Chapter: Modern Supervised Fine-Tuning (SFT) & Multimodal Adaptation
 
-This project provides a hands-on workshop for fine-tuning large language models (LLMs). It demonstrates a complete workflow, from evaluating a base model to generating a synthetic dataset, fine-tuning the model, and evaluating its improved performance. 
+## Abstract
+This chapter presents a comprehensive technical study on Parameter-Efficient Fine-Tuning (PEFT) of large language models (LLMs) and vision-language models (VLMs) under strict VRAM constraints. We investigate three distinct paradigms:
+1. **Reasoned Financial Sentiment Classification** with Chain-of-Thought (CoT) prompting using Gemma 4.
+2. **Clinical cardiology QA Adaptation** with target-token perplexity validation using Microsoft's Phi-4.
+3. **Multimodal LaTeX OCR Transcription** using Qwen2-VL.
 
-The workshop covers three primary tracks:
-1.  **Sherlock Holmes Expert**: Domain-specific knowledge injection via QA fine-tuning.
-2.  **Tunix-Med Medical Expert**: High-performance domain adaptation using JAX/Tunix for cardiology.
-3.  **Reasoned Financial Sentiment**: Enhancing classification with data augmentation and Chain-of-Thought (CoT) reasoning.
+We discuss model quantization, prompt formatting, optimization parameters, training trajectories, and empirical results.
 
-## Compatibility and Hardware Requirements
+---
 
-The examples in this repository are optimized for the following environments:
+## 1. Theoretical Foundations of Parameter-Efficient Fine-Tuning
 
-*   **NVIDIA GPU systems**: 16GB VRAM or more (e.g., RTX 3090/4080, A10/L4).
-*   **Google Colab**: Compatible with the free **T4 GPU** tier.
-*   **macOS (Apple Silicon)**: M-series chips with at least **16GB of unified memory**.
+### A. LoRA & QLoRA
+Supervised Fine-Tuning (SFT) of modern generative architectures in full precision is computationally prohibitive. Parameter-Efficient Fine-Tuning (PEFT) through Low-Rank Adaptation (LoRA) mitigates this by freezing the pre-trained weights $W_0 \in \mathbb{R}^{d \times k}$ and injecting trainable rank decomposition matrices $A \in \mathbb{R}^{d \times r}$ and $B \in \mathbb{R}^{r \times k}$ (where rank $r \ll \min(d, k)$):
 
-## Workshop Workflow
+$$\Delta W = B \cdot A$$
 
-The project is divided into twelve Jupyter notebooks, organized into three tracks:
+For a forward pass, the update is scaled by a factor of $\frac{\alpha}{r}$:
 
-### Track 1: Sherlock Holmes Expert (Knowledge Injection)
-1.  **`01_knowledge_evaluation.ipynb`**: Evaluates the baseline knowledge of the pre-trained `google/gemma-3-1b-it` model on Sherlock Holmes lore.
-2.  **`02_synthetic_data_preparation.ipynb`**: Demonstrates how to scrape Wikipedia and use a teacher model to generate and curate a high-quality QA dataset.
-3.  **`03_fine_tuning_QA.ipynb`**: Performs Supervised Fine-Tuning (SFT) using QLoRA to inject domain-specific knowledge.
-4.  **`04_knowledge_evaluation_final.ipynb`**: Re-evaluates the fine-tuned model to quantify the "knowledge gain" compared to the baseline.
+$$h = W_0 x + \frac{\alpha}{r} \Delta W x$$
 
-### Track 2: Tunix-Med Medical Expert (Cardiology QA)
-5.  **`05_medical_baseline_evaluation.ipynb`**: Establishes a baseline for cardiology knowledge using specialized medical metrics and an AI judge.
-6.  **`06_medical_synthetic_data.ipynb`**: Automates the creation of a high-quality medical QA dataset focused on Cardiology pathologies.
-7.  **`07_tunix_sft_training.ipynb`**: Fine-tunes Gemma 3 using **Tunix** (JAX/Flax) for highly efficient, scalable training with streaming data.
-8.  **`08_medical_evaluation_final.ipynb`**: Evaluates the medical expert model on held-out clinical questions to verify factual accuracy.
+QLoRA (Quantized LoRA) extends this concept by quantizing the base model weights $W_0$ into 4-bit NormalFloat (NF4) precision, which is mathematically optimized for zero-mean, unit-variance distributions. The activations are computed in 16-bit brain floating-point (`bfloat16`) formats during backward propagation, dramatically reducing the GPU VRAM footprint while keeping performance parity.
 
-### Track 3: Reasoned Financial Sentiment (Reasoning & Classification)
-9.  **`09_augment_sentiment_data.ipynb`**: Implements a robust data augmentation pipeline to anonymize PII and diversify numerical figures in financial headlines.
-10. **`10_generate_sentiment_explanations.ipynb`**: Uses a teacher model (**Qwen 2.5 7B**) to generate deep financial explanations for sentiment labels.
-11. **`11_fine_tuning_sentiment.ipynb`**: Fine-tunes **Gemma 3 1B** to predict both sentiment and the underlying financial reasoning (CoT).
-12. **`12_sentiment_evaluation.ipynb`**: Validates the model on accuracy, tag integrity, and reasoning quality using an LLM-as-a-judge.
+### B. VRAM Constraints & Optimization Strategies
+To perform stable training on consumer-grade GPUs (e.g. max 16GB VRAM), several memory management techniques are utilized:
+- **Gradient Checkpointing**: Trade compute for memory by discarding intermediate activations during the forward pass and recomputing them on-demand during the backward pass.
+- **KV Cache Deactivation**: Disabling key-value cache (`model.config.use_cache = False`) during training to save substantial activation memory.
+- **Fused Optimizers**: Fusing gradient updates in memory using `adamw_torch_fused` to reduce CUDA kernel invocation overhead.
 
-## Getting Started
+---
 
-To run the notebooks, ensure you have a compatible environment. It is also necessary to have a Hugging Face account and to accept the Google Gemma model licence. For detailed, step-by-step assistance, please refer to the `hugging_face_setup_guide.pdf` included in this repository. 
+## 2. Track 1: Chain-of-Thought Financial Sentiment (Gemma 4)
 
-You can install the necessary dependencies using the provided script:
+### A. Paradigm & Dataset
+Standard classification prompts often fail to capture subtle economic implications. Chain-of-Thought (CoT) reasoning addresses this by forcing the model to generate intermediate rationales before outputting the final classification label. 
 
-```bash
-sh install.sh
+We utilize the `lmassaron/FinancialPhraseBank_explained` dataset, which enriches human-curated financial headlines with LLM-generated explanations. The dataset includes pre-split `'train'`, `'validation'`, and `'test'` splits.
+
+### B. Notebook Architecture & Cells
+The notebook [financial_sentiment_cot.ipynb](file:///home/lmassaron/code/sft-examples/temp_workshop/financial_sentiment_cot.ipynb) is structured as follows:
+- **Cell 1-2**: Import libraries and detect CUDA environment configurations.
+- **Cell 3**: Load the dataset from the Hugging Face Hub, renaming columns to `'text'` and `'reasoning'`.
+- **Cell 4**: Format conversation prompts using the model's native chat template. The system prompt instructs the model to reply using `<sentiment>` and `<reasoning>` tags:
+  ```python
+  def format_prompt(example):
+      messages = [
+          {'role': 'user', 'content': SYSTEM_PROMPT + f'\nHeadline: "{example["text"]}"'},
+          {'role': 'assistant', 'content': f'<sentiment>{example["sentiment"]}</sentiment>\n<reasoning>{example["reasoning"]}</reasoning>'}
+      ]
+      prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
+      return {'text': prompt}
+  ```
+- **Cell 5**: Load `google/gemma-4-E2B-it` in 4-bit NF4 precision. Set up LoRA adapters targeting all linear modules (e.g., projection and attention projection layers) with $r=8$ and $\alpha=32$.
+- **Cell 6**: Train using the TRL `SFTTrainer` with a Cosine Annealing learning rate decay and a warmup ratio of 0.1. Crucially, we set `dataset_kwargs={"add_special_tokens": False}` to prevent duplicate BOS tokens.
+- **Cell 7**: Run batch evaluation on the original (non-augmented) test set using left-padding.
+
+### C. Training Trajectory & Quantitative Results
+During training, the cross-entropy loss smoothly converged. The evaluation on the 484 original test headlines produced the following metrics:
+- **Sentiment Classification Accuracy**: **81.82%**
+- **Tag Integrity (Valid Output Formats)**: **94.83%**
+
+#### Detailed Classification Report:
 ```
+              precision    recall  f1-score   support
 
-## Results
-The workshop demonstrates how high-quality synthetic data and parameter-efficient fine-tuning (LoRA/QLoRA) can transform a general-purpose model into a specialized expert capable of complex reasoning and deep domain knowledge.
+    negative       0.88      0.85      0.87        61
+     neutral       0.84      0.89      0.87       287
+    positive       0.91      0.65      0.76       136
+
+    accuracy                           0.82       484
+   macro avg       0.66      0.60      0.62       484
+weighted avg       0.87      0.82      0.84       484
+```
+*Discussion*: Precision remains exceptionally high across all classes (88-91%). The lower recall on positive sentiments (65%) suggest the model tends to fall back to neutral predictions for ambiguous positive headlines, a common characteristic of conservative financial analysts.
+
+---
+
+## 3. Track 2: Clinical Cardiology QA Expert (Phi-4)
+
+### A. Paradigm & Dataset
+Adapting LLMs to specialized medical contexts requires highly aligned knowledge extraction. We utilize the `lmassaron/medical-cardiology-qa` dataset, which contains doctor-patient dialogues on pathophysiology, diagnostic criteria, and treatment protocols. We split the dataset 90% for training and 10% for validation.
+
+### B. Notebook Architecture & Cells
+The notebook [medical_expert_cardiology.ipynb](file:///home/lmassaron/code/sft-examples/temp_workshop/medical_expert_cardiology.ipynb) utilizes the **Unsloth** library to accelerate training:
+- **Cell 1**: Import `unsloth` at the very beginning to load optimized kernels before importing PyTorch or Hugging Face.
+- **Cell 2-3**: Load Microsoft's `unsloth/Phi-4-mini-instruct` in 4-bit quantization. Enable QLoRA adapters with `FastLanguageModel.get_peft_model`.
+- **Cell 4**: Apply a custom format function mapping dialogues to chat template strings.
+- **Cell 5**: Configure `SFTTrainer` with `Unsloth` optimized memory savings. Disables KV-caching.
+- **Cell 6**: Perform batch evaluation over the validation split, calculating the exact **Perplexity (PPL)** of the doctor's response tokens.
+
+### C. Perplexity Evaluation & Results
+Perplexity measures the exponential of the cross-entropy loss calculated exclusively on the doctor's response tokens (masking out prompt tokens with `-100` label values):
+
+$$PPL = \exp\left( - \frac{1}{N} \sum_{i=1}^{N} \log P(y_i \mid x, y_{<i}) \right)$$
+
+Training over 100 steps resulted in a low validation perplexity:
+- **Average Evaluation Perplexity**: **4.4341**
+
+#### Sample Evaluation Comparison:
+- **Question**: *What are some connective tissue disorders that increase the risk of aortic dissection?*
+- **Expected Answer**: *Connective tissue disorders that increase the risk of aortic dissection include Marfan syndrome, Ehlers-Danlos syndrome, and Loeys-Dietz syndrome. These conditions affect the structural integrity of the arterial walls.*
+- **Generated Answer**: *Connective tissue disorders such as Marfan syndrome, Ehlers-Danlos syndrome, and Loeys-Dietz syndrome are known to increase the risk of aortic dissection. These conditions affect the body's connective tissue, which can weaken the aortic wall and make it more susceptible to dissection.*
+- **Perplexity**: **1.5286**
+
+*Discussion*: A perplexity of 1.52 indicates the model is highly confident in generating correct cardiology terms. The generated response captures the diagnostic details perfectly while providing a more detailed pathophysiological explanation than the reference text.
+
+---
+
+## 4. Track 3: Multimodal LaTeX OCR Transcription (Qwen2-VL)
+
+### A. Multimodal Architecture
+Vision-Language Models (VLMs) process image inputs by passing them through a frozen Vision Transformer (ViT) encoder to obtain visual features. These features are mapped into the text token space using a trainable projection layer (usually a Multi-Layer Perceptron), and then concatenated directly with text tokens to be processed by the autoregressive decoder:
+
+$$h = [ \text{Proj}(\text{ViT}(x_{\text{image}})) ; x_{\text{text}} ]$$
+
+We freeze the vision transformer to preserve generic visual features and train the projections and language attention modules using QLoRA.
+
+### B. Notebook Architecture & Cells
+The notebook [vision_finetuning_latex.ipynb](file:///home/lmassaron/code/sft-examples/temp_workshop/vision_finetuning_latex.ipynb) implements handwritten-to-LaTeX transcription:
+- **Cell 1**: Import the `FastVisionModel` class from Unsloth.
+- **Cell 2**: Load the lightweight `unsloth/Qwen2-VL-2B-Instruct` model and initialize vision and language adapters.
+- **Cell 3**: Load the `unsloth/LaTeX_OCR` dataset. Map the dataset into a conversational format. Crucially, PIL Images must be passed in a separate `images` column to prevent Hugging Face `datasets` from serializing nested images into invalid dictionaries:
+  ```python
+  def convert_to_conversation(sample):
+      conversation = [
+          {
+              'role': 'user',
+              'content': [
+                  {'type': 'text', 'text': 'Write the LaTeX representation for this image.'},
+                  {'type': 'image'}
+              ]
+          },
+          {
+              'role': 'assistant',
+              'content': [{'type': 'text', 'text': sample['text']}]
+          }
+      ]
+      return {'messages': conversation, 'images': [sample['image']]}
+  ```
+- **Cell 4**: Configure `SFTTrainer` with `UnslothVisionDataCollator(model, tokenizer)`. Specify `remove_unused_columns = False` in `SFTConfig` so image buffers are not dropped.
+- **Cell 5**: Switch the model to inference mode using `FastVisionModel.for_inference(model)` and generate LaTeX formulas.
+
+### C. Trajectory & Results
+After training for 30 steps, the model successfully generalized from handwritten images to clean LaTeX codes:
+- **Expected LaTeX**: `\Gamma _ { \sigma } + \Gamma _ { m } = \int d ^ { 2 } x [ - \frac { 1 } { 8 \pi } T r ( \partial _ { \mu } U \partial _ { \mu } U ^ { \dag } ) + \frac { 1 } { 2 } m ^ { 2 } T r ( U + U ^ { \dag } - 2 ) ] ,`
+- **Generated LaTeX**: `\Gamma _ { \sigma } + \Gamma _ { m } = \int d ^ { 2 } x [ - \frac { 1 } { 8 \pi } T r ( \partial _ { \mu } U \partial _ { \mu } U ^ { \dagger } ) + \frac { 1 } { 2 } m ^ { 2 } T r ( U + U ^ { \dagger } - 2 ) ] ] ,`
+
+*Discussion*: The model's transcription of the mathematical formula is highly accurate. Interestingly, the model generated `\dagger` instead of the shorthand `\dag` present in the expected output. Both represent the same mathematical symbol, demonstrating that the VLM is not merely memorizing sequences, but has acquired semantic understanding of LaTeX rendering conventions.
+
+---
+
+## 5. Conclusion & Best Practices
+By adopting PEFT, proper quantization, and memory-saving techniques, high-fidelity supervised fine-tuning of large textual and multimodal architectures can be successfully executed on 16GB GPUs. Crucial takeaways include:
+1. Setting `dataset_kwargs={"add_special_tokens": False}` when using chat templates to prevent duplicate BOS tokens.
+2. Disabling key-value cache (`use_cache=False`) during the backward pass.
+3. Keeping image datasets in separate root-level columns to avoid nested dict serialization errors under Hugging Face.
