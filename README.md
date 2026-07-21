@@ -274,21 +274,12 @@ Prior to DPO alignment, instruct-tuned models frequently insert conversational p
 3. **Word Count Compression**: Verbose, low-density sentences are compressed, reducing the total length of responses by approximately 30-40% while preserving all key information.
 
 #### Concrete Stylistic Output Comparison:
-- **Test Prompt**: *"Tell me the capital of France and its three largest cities in a concise list."*
-- **Base Instruct Model Output**:
-  > Certainly! I'd be happy to help you with that. The capital of France is Paris. Here is a list of the three largest cities in France:
-  > - Paris (which is also the capital and largest city)
-  > - Marseille (located in the south)
-  > - Lyon (a major financial hub in the east)
-  > 
-  > I hope this information is helpful for your needs!
-- **DPO Aligned Model Output**:
-  > **Capital**: Paris
-  > **Three Largest Cities**:
-  > - Paris
-  > - Marseille
-  > - Lyon
-- **Measurable Impact**: Preamble completely eliminated. Output size reduced from 78 words to 18 words (76.9% compression), maximizing data density.
+- **Test Prompt**: *"Explain why the sky is blue in one concise sentence."*
+- **Base Instruct Model Output** (typically contains verbose explanations or introductory fillers):
+  > Certainly! The sky is blue because of a phenomenon called Rayleigh scattering. When sunlight reaches Earth's atmosphere, it is scattered in all directions by all the gases and particles in the air. Blue light is scattered more than the other colors because it travels as shorter, smaller waves. This is why we see a blue sky most of the time!
+- **DPO Aligned Model Output** (direct, concise, and optimized):
+  > The sky appears blue because the Earth's atmosphere scatters sunlight more efficiently for the shorter blue wavelengths, making the blue light appear more prominent when we look at the sky.
+- **Measurable Impact**: Introductory conversational preambles completely eliminated. Output size and structure optimized for direct information delivery.
 
 ---
 
@@ -340,9 +331,7 @@ The notebook [alignment_grpo.ipynb](file:///home/lmassaron/code/sft-examples/ali
   *   **Model Structured Output**:
       ```xml
       <reasoning>
-      Natalia sold 48 clips in April.
-      In May, she sold half as many clips as in April, which is 48 / 2 = 24 clips.
-      In total, she sold 48 + 24 = 72 clips.
+      Natalia sold 48 clips in April. In May, she sold half as many as in April, which means she sold 48 / 2 = 24 clips. Therefore, the total number of clips sold is 48 (April) + 24 (May) = 72 clips.
       </reasoning>
       <answer>72</answer>
       ```
