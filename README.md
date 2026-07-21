@@ -6,7 +6,7 @@ This chapter presents a comprehensive technical study on Parameter-Efficient Fin
 2. **Clinical cardiology QA Adaptation** with target-token perplexity validation using Microsoft's Phi-4.
 3. **Multimodal LaTeX OCR Transcription** using Qwen2-VL.
 4. **Stylistic Formatting Alignment** via Direct Preference Optimization (DPO) using Qwen2.5-3B.
-5. **Mathematical Reasoning & Consistency** via Group Relative Policy Optimization (GRPO) using Qwen2.5-3B.
+5. **Mathematical Reasoning & Consistency** via Group Relative Policy Optimization (GRPO) using Qwen2.5-0.5B.
 
 We discuss model quantization, preference pair formatting, RL reward functions, optimization parameters, training trajectories, and empirical results.
 
@@ -283,7 +283,7 @@ Prior to DPO alignment, instruct-tuned models frequently insert conversational p
 
 ---
 
-## 6. Track 5: Mathematical Reasoning & Consistency via GRPO (Qwen2.5-3B)
+## 6. Track 5: Mathematical Reasoning & Consistency via GRPO (Qwen2.5-0.5B)
 
 ### A. Paradigm & Mathematical Formulation
 Group Relative Policy Optimization (GRPO) is a reinforcement learning algorithm that optimizes policy distributions without maintaining a separate critic network (which typically consumes 50% of active VRAM during training). Instead of estimating a state-value baseline $V(s)$, GRPO draws a group of $G$ outputs $\{y_1, y_2, \dots, y_G\}$ for each input prompt $x$ from the active policy. It then computes the rewards $\{r_1, r_2, \dots, r_G\}$ for these outputs and estimates their advantages relative to the group:
@@ -298,43 +298,69 @@ This group-relative approach guarantees that the advantages sum to zero across e
 
 ### B. Reward Architecture & Parsers
 GRPO aligns LLMs by evaluating rollout responses using rule-based reward functions instead of neural reward models. We define two mathematical parses:
-1. **Format Reward**: Encourages the model to place its step-by-step thinking process inside `<reasoning>` tags and the final answer inside `<answer>` tags. It parses the response using regular expressions checking tag existence:
+1. **Format Reward (`format_reward`) — Weight 1.0**: Encourages the model to place its step-by-step thinking process inside `<reasoning>` tags and the final answer inside `<answer>` tags.
    ```python
-   def format_reward_func(prompts, completions, **kwargs):
-       pattern = r"^<reasoning>\n.*?\n</reasoning>\n<answer>\n.*?\n</answer>$"
-       # Returns 1.0 if formatted correctly else 0.0
+   def format_reward(completions, **kwargs):
+       pattern = (
+           r"^<reasoning>[\s\S]*?<\/reasoning>\s*<answer>[\s\S]*?<\/answer>$"
+       )
+       responses = [completion[0]["content"] for completion in completions]
+       return [
+           1.0 if re.match(pattern, response) else 0.0 for response in responses
+       ]
    ```
-2. **Correctness Reward**: Validates if the final numeric answer matches the ground truth value. It extracts the value within the `<answer>` tag and compares it to the target number:
+2. **Correctness Reward (`correctness_reward`) — Weight 3.0**: Validates if the final numeric answer matches the ground truth value. Weight is scaled to 3.0 to ensure the optimizer prioritizes mathematical accuracy over format-only gains.
    ```python
-   def correctness_reward_func(prompts, completions, answer, **kwargs):
-       # Extracts number from <answer>...</answer> and compares to targets
-       # Returns 2.0 if extracted_answer == ground_truth else 0.0
+   def correctness_reward(completions, answer, **kwargs):
+       responses = [completion[0]["content"] for completion in completions]
+       extracted = [
+           extract_last_xml_answer(response) for response in responses
+       ]
+       return [
+           3.0 if ext == ans else 0.0 for ext, ans in zip(extracted, answer)
+       ]
    ```
 
-### C. Notebook Architecture & Cells
-The notebook [alignment_grpo.ipynb](file:///home/lmassaron/code/sft-examples/alignment_grpo.ipynb) configures a consumer-friendly GRPO pipeline:
-- **Cell 1**: Setup Environment, imports, and inject the TRL package check monkey-patch to bypass missing dependency errors.
-- **Cell 2**: Load the GSM8K dataset, setting up the system prompt instruction that enforces thinking in `<reasoning>` tags and answering in `<answer>` tags.
-- **Cell 3**: Define `correctness_reward_func` and `format_reward_func`.
-- **Cell 4**: Quantization configuration, model loading, and `GRPOTrainer` initialization using native PyTorch generation (`use_vllm=False`).
-- **Cell 5**: Train the model for 50 steps using LoRA adapters.
-- **Cell 6**: Inference verification of structured mathematical reasoning.
+### C. 100-Problem Benchmark Results & Trajectory
+We run a statistical-grade benchmark on 100 test questions from the `openai/gsm8k` test split before and after 250 steps of GRPO optimization (`max_completion_length=384`):
+
+```
+============================================================
+>>> FINAL GSM8K 100-PROBLEM BENCHMARK RESULTS <<<
+Pre-GRPO Format Compliance:  0.0%
+Post-GRPO Format Compliance: 98.0%
+Format Compliance Delta:    +98.0%
+
+Pre-GRPO Math Accuracy:      0.0%
+Post-GRPO Math Accuracy:     33.0%
+Math Accuracy Delta:        +33.0%
+============================================================
+```
+
+#### Trajectory & Key Takeaways:
+1. **Format Compliance (0.0% → 98.0%)**: The pre-trained 0.5B model completely failed to generate XML tags under system prompt instructions (0/100). GRPO alignment achieved near-perfect compliance (98/100).
+2. **Math Accuracy (0.0% → 33.0%)**: Pre-GRPO extracted zero correct formatted numeric answers. Post-GRPO achieved **33.0% exact accuracy (+33.0% Delta)** on 100 test problems, proving that relative group advantage optimization successfully aligns both format adherence and mathematical calculation.
 
 ### D. Purpose of Reinforcement Learning & Model Capabilities
 - **Purpose of RL Alignment**: Supervised fine-tuning maps inputs to static answers, but struggles to teach multi-step logical deduction or enforce consistent output formatting. Reinforcement learning via GRPO forces the model to explore reasoning trajectories. By rewarding correct math calculations and penalizing improper formatting, the model is aligned to consistently structure its thoughts, improving mathematical accuracy.
 - **Capabilities of the Fine-Tuned Model**:
   - **Structured Reasoning**: Systematic output of mathematical steps within `<reasoning>` tags before declaring the final answer, ensuring transparency.
-  - **Perfect Format Adherence**: Consistently structures responses using XML tags without requiring external runtime validation.
+  - **98% Format Adherence**: Consistently structures responses using XML tags without requiring external runtime validation.
+  - **33% Exact Math Accuracy (+33% Delta)**: Achieves strong mathematical performance on GSM8K word problems.
 
   #### Structured Math Reasoning Example:
-  *   **Prompt**: *"Natalia sold clips to 48 of her friends in April, and then half as many in May. How many clips did Natalia sell in total?"*
+  *   **Prompt**: *"Janet’s ducks lay 16 eggs per day. She eats three for breakfast every morning and bakes muffins for her friends every day with four. She sells the remainder at the farmers' market daily for $2 per fresh duck egg. How much in dollars does she make every day at the farmers' market?"*
   *   **Model Structured Output**:
       ```xml
       <reasoning>
-      Natalia sold 48 clips in April. In May, she sold half as many as in April, which means she sold 48 / 2 = 24 clips. Therefore, the total number of clips sold is 48 (April) + 24 (May) = 72 clips.
+      Daily consumption of eggs: 16 - 3 (breakfast) - 4 (baking) = 9 eggs.
+      Selling price per egg: $2.
+
+      Total earnings per day: 9 * $2 = 18.
       </reasoning>
-      <answer>72</answer>
+      <answer>18</answer>
       ```
+
 
 ---
 
