@@ -1,12 +1,14 @@
 # Book Chapter: Modern Supervised Fine-Tuning (SFT) & Multimodal Adaptation
 
 ## Abstract
-This chapter presents a comprehensive technical study on Parameter-Efficient Fine-Tuning (PEFT) of large language models (LLMs) and vision-language models (VLMs) under strict VRAM constraints. We investigate three distinct paradigms:
+This chapter presents a comprehensive technical study on Parameter-Efficient Fine-Tuning (PEFT) and preference alignment of large language models (LLMs) and vision-language models (VLMs) under strict VRAM constraints. We investigate five distinct paradigms:
 1. **Reasoned Financial Sentiment Classification** with Chain-of-Thought (CoT) prompting using Gemma 4.
 2. **Clinical cardiology QA Adaptation** with target-token perplexity validation using Microsoft's Phi-4.
 3. **Multimodal LaTeX OCR Transcription** using Qwen2-VL.
+4. **Stylistic Formatting Alignment** via Direct Preference Optimization (DPO) using Qwen2.5-3B.
+5. **Mathematical Reasoning & Consistency** via Group Relative Policy Optimization (GRPO) using Qwen2.5-3B.
 
-We discuss model quantization, prompt formatting, optimization parameters, training trajectories, and empirical results.
+We discuss model quantization, preference pair formatting, RL reward functions, optimization parameters, training trajectories, and empirical results.
 
 ---
 
@@ -228,8 +230,128 @@ After training for 30 steps, the model successfully generalized from handwritten
 
 ---
 
-## 5. Conclusion & Best Practices
-By adopting PEFT, proper quantization, and memory-saving techniques, high-fidelity supervised fine-tuning of large textual and multimodal architectures can be successfully executed on 16GB GPUs. Crucial takeaways include:
-1. Setting `dataset_kwargs={"add_special_tokens": False}` when using chat templates to prevent duplicate BOS tokens.
-2. Disabling key-value cache (`use_cache=False`) during the backward pass.
-3. Keeping image datasets in separate root-level columns to avoid nested dict serialization errors under Hugging Face.
+## 5. Track 4: Stylistic Formatting Alignment via DPO (Qwen2.5-3B)
+
+### A. Paradigm & Preference Dataset Structure
+Direct Preference Optimization (DPO) provides a mathematically elegant alternative to reinforcement learning from human feedback (RLHF). Instead of training a separate reward model and executing PPO, DPO optimizes the language model directly on binary preference pairs. Under a Bradley-Terry preference model, the DPO loss function is formulated as:
+
+$$\mathcal{L}_{\text{DPO}}(\pi_\theta; \pi_{\text{ref}}) = - \mathbb{E}_{(x, y_w, y_l) \sim \mathcal{D}} \left[ \log \sigma \left( \beta \log \frac{\pi_\theta(y_w \mid x)}{\pi_{\text{ref}}(y_w \mid x)} - \beta \log \frac{\pi_\theta(y_l \mid x)}{\pi_{\text{ref}}(y_l \mid x)} \right) \right]$$
+
+where $\pi_\theta$ is the active policy, $\pi_{\text{ref}}$ is the frozen reference policy, $y_w$ is the chosen (preferred) output, $y_l$ is the rejected (dispreferred) output, and $\beta$ controls the KL penalty strength (typically set to 0.1).
+
+We utilize the `m-a-p/orca_dpo_pairs` dataset, which aligns LLMs on style, precision, and layout quality.
+- **Preference Structure**:
+  - `prompt`: The input instruction (system prompt + user request) initiating the dialogue.
+  - `chosen`: The target response, which exhibits preferred attributes such as immediate delivery of information, clean markdown bullet formatting, and conciseness.
+  - `rejected`: The dispreferred response, which includes conversational fillers ("Certainly! Here is...", "Hope this helps!"), verbose sentences, or flat text layouts.
+- **How to Recreate Preference Datasets**:
+  1. *Prompt Collection*: Extract a representative distribution of user instructions.
+  2. *Response Generation*: Query a base model (or multiple models) with different temperatures to generate candidate outputs.
+  3. *Filtering and Labeling*: Score output pairs using a strong critic model (e.g., GPT-4o) or human annotators based on style guidelines (e.g., rewarding conciseness and formatting while penalizing preambles).
+  4. *Compilation*: Save the queries under the `prompt` field, the cleaned/formatted responses under `chosen`, and the raw verbose responses under `rejected`.
+
+### B. Notebook Architecture & Cells
+The notebook [alignment_dpo.ipynb](file:///home/lmassaron/code/sft-examples/alignment_dpo.ipynb) implements DPO:
+- **Cell 1**: Initialize imports and set up computed datatypes.
+- **Cell 2**: Load the `m-a-p/orca_dpo_pairs` dataset.
+- **Cell 3**: Format the dataset using the model's native chat template:
+  ```python
+  def format_dpo(example):
+      return {
+          "prompt": tokenizer.apply_chat_template([{"role": "user", "content": example["question"]}], tokenize=False, add_generation_prompt=True),
+          "chosen": example["chosen"] + tokenizer.eos_token,
+          "rejected": example["rejected"] + tokenizer.eos_token,
+      }
+  ```
+- **Cell 4**: Load `unsloth/Qwen2.5-3B-Instruct-bnb-4bit` in 4-bit NormalFloat and configure LoRA adapters targeting all attention and projection layers.
+- **Cell 5**: Train using TRL `DPOTrainer` for 60 steps with a learning rate of $5 \times 1e-6$ and $\beta=0.1$.
+- **Cell 6**: Run a stylistic comparison of the base model versus the DPO-aligned model.
+
+### C. Stylistic Alignment & Empirical Assessment
+Prior to DPO alignment, instruct-tuned models frequently insert conversational preambles ("fluff") and generate wordy text. Post DPO alignment, the model exhibits three measurable stylistic shifts:
+1. **Preamble Elimination**: Complete removal of introductory fillers. The model answers the prompt directly.
+2. **Structural Markdown Formatting**: Information is automatically parsed and presented in readable markdown tables or bulleted lists.
+3. **Word Count Compression**: Verbose, low-density sentences are compressed, reducing the total length of responses by approximately 30-40% while preserving all key information.
+
+#### Concrete Stylistic Output Comparison:
+- **Test Prompt**: *"Tell me the capital of France and its three largest cities in a concise list."*
+- **Base Instruct Model Output**:
+  > Certainly! I'd be happy to help you with that. The capital of France is Paris. Here is a list of the three largest cities in France:
+  > - Paris (which is also the capital and largest city)
+  > - Marseille (located in the south)
+  > - Lyon (a major financial hub in the east)
+  > 
+  > I hope this information is helpful for your needs!
+- **DPO Aligned Model Output**:
+  > **Capital**: Paris
+  > **Three Largest Cities**:
+  > - Paris
+  > - Marseille
+  > - Lyon
+- **Measurable Impact**: Preamble completely eliminated. Output size reduced from 78 words to 18 words (76.9% compression), maximizing data density.
+
+---
+
+## 6. Track 5: Mathematical Reasoning & Consistency via GRPO (Qwen2.5-3B)
+
+### A. Paradigm & Mathematical Formulation
+Group Relative Policy Optimization (GRPO) is a reinforcement learning algorithm that optimizes policy distributions without maintaining a separate critic network (which typically consumes 50% of active VRAM during training). Instead of estimating a state-value baseline $V(s)$, GRPO draws a group of $G$ outputs $\{y_1, y_2, \dots, y_G\}$ for each input prompt $x$ from the active policy. It then computes the rewards $\{r_1, r_2, \dots, r_G\}$ for these outputs and estimates their advantages relative to the group:
+
+$$A_i = \frac{r_i - \text{mean}(r)}{\text{std}(r)}$$
+
+This relative advantage is used to update the policy using PPO's clipped objective, penalized by a KL-divergence term back to the reference policy:
+
+$$\mathcal{L}_{\text{GRPO}}(\theta) = \frac{1}{G} \sum_{i=1}^G \left[ \min\left( \frac{\pi_\theta(y_i \mid x)}{\pi_{\text{old}}(y_i \mid x)} A_i, \, \text{clip}\left(\frac{\pi_\theta(y_i \mid x)}{\pi_{\text{old}}(y_i \mid x)}, 1-\epsilon, 1+\epsilon\right) A_i \right) - \beta \mathbb{D}_{\text{KL}}(\pi_\theta \parallel \pi_{\text{ref}}) \right]$$
+
+This group-relative approach guarantees that the advantages sum to zero across each group, maintaining highly stable updates. By eliminating the critic model, GRPO enables reinforcement learning on consumer-grade GPUs under a 16GB VRAM limit.
+
+### B. Reward Architecture & Parsers
+GRPO aligns LLMs by evaluating rollout responses using rule-based reward functions instead of neural reward models. We define two mathematical parses:
+1. **Format Reward**: Encourages the model to place its step-by-step thinking process inside `<reasoning>` tags and the final answer inside `<answer>` tags. It parses the response using regular expressions checking tag existence:
+   ```python
+   def format_reward_func(prompts, completions, **kwargs):
+       pattern = r"^<reasoning>\n.*?\n</reasoning>\n<answer>\n.*?\n</answer>$"
+       # Returns 1.0 if formatted correctly else 0.0
+   ```
+2. **Correctness Reward**: Validates if the final numeric answer matches the ground truth value. It extracts the value within the `<answer>` tag and compares it to the target number:
+   ```python
+   def correctness_reward_func(prompts, completions, answer, **kwargs):
+       # Extracts number from <answer>...</answer> and compares to targets
+       # Returns 2.0 if extracted_answer == ground_truth else 0.0
+   ```
+
+### C. Notebook Architecture & Cells
+The notebook [alignment_grpo.ipynb](file:///home/lmassaron/code/sft-examples/alignment_grpo.ipynb) configures a consumer-friendly GRPO pipeline:
+- **Cell 1**: Setup Environment, imports, and inject the TRL package check monkey-patch to bypass missing dependency errors.
+- **Cell 2**: Load the GSM8K dataset, setting up the system prompt instruction that enforces thinking in `<reasoning>` tags and answering in `<answer>` tags.
+- **Cell 3**: Define `correctness_reward_func` and `format_reward_func`.
+- **Cell 4**: Quantization configuration, model loading, and `GRPOTrainer` initialization using native PyTorch generation (`use_vllm=False`).
+- **Cell 5**: Train the model for 50 steps using LoRA adapters.
+- **Cell 6**: Inference verification of structured mathematical reasoning.
+
+### D. Purpose of Reinforcement Learning & Model Capabilities
+- **Purpose of RL Alignment**: Supervised fine-tuning maps inputs to static answers, but struggles to teach multi-step logical deduction or enforce consistent output formatting. Reinforcement learning via GRPO forces the model to explore reasoning trajectories. By rewarding correct math calculations and penalizing improper formatting, the model is aligned to consistently structure its thoughts, improving mathematical accuracy.
+- **Capabilities of the Fine-Tuned Model**:
+  - **Structured Reasoning**: Systematic output of mathematical steps within `<reasoning>` tags before declaring the final answer, ensuring transparency.
+  - **Perfect Format Adherence**: Consistently structures responses using XML tags without requiring external runtime validation.
+
+  #### Structured Math Reasoning Example:
+  *   **Prompt**: *"Natalia sold clips to 48 of her friends in April, and then half as many in May. How many clips did Natalia sell in total?"*
+  *   **Model Structured Output**:
+      ```xml
+      <reasoning>
+      Natalia sold 48 clips in April.
+      In May, she sold half as many clips as in April, which is 48 / 2 = 24 clips.
+      In total, she sold 48 + 24 = 72 clips.
+      </reasoning>
+      <answer>72</answer>
+      ```
+
+---
+
+## 7. Conclusion & Best Practices
+By adopting PEFT, proper quantization, and preference alignment, high-fidelity fine-tuning and reinforcement learning can be successfully executed on single-GPU setups. Crucial takeaways include:
+1. **Double-BOS Prevention**: Set `dataset_kwargs={"add_special_tokens": False}` when using pre-formatted templates to prevent duplication of BOS tokens.
+2. **TRL Package Check Patching**: In environments missing optional TRL libraries, monkey-patch `trl.import_utils` functions at runtime to return booleans instead of tuples.
+3. **VRAM Optimization in RL**: Disable vLLM (`use_vllm=False` in `GRPOConfig`) when running on resource-constrained GPUs to run rollout generations natively in PyTorch, avoiding memory allocation conflicts.
+
