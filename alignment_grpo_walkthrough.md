@@ -12,9 +12,10 @@ This track implements **Group Relative Policy Optimization (GRPO)** on **`Qwen/Q
 
 ### Key Highlights
 - **100-Problem GSM8K Benchmark**: Evaluates pre- and post-GRPO performance on a 100-problem slice of the GSM8K test set.
-- **Format Compliance Jump**: Boosts XML tag adherence from **0.0% to 90.0% (+90.0% Delta)**.
-- **Math Accuracy Delta**: Increases exact extracted math accuracy from **1.0% to 39.0% (+38.0% Delta)**.
-- **Critic-Free RL**: Eliminates the 50% VRAM overhead of a value network by estimating advantages relative to group rollouts.
+- **Decoupled Math Extraction Rule**: Decouples formatting compliance from raw reasoning ability by extracting the last number appearing in the generated text (`extract_last_number`).
+- **Decoupled Math Reasoning Accuracy**: Increases raw math reasoning accuracy from **33.0% to 39.0% (+6.0% Net Reasoning Delta)**.
+- **Strict Formatted Math Accuracy**: Increases strict XML-wrapped accuracy from **0.0% to 39.0% (+39.0% Strict Delta)**.
+- **Format Compliance Jump**: Boosts XML tag adherence from **0.0% to 90.0% (+90.0% Format Delta)**.
 
 ---
 
@@ -30,35 +31,27 @@ $$\mathcal{L}_{\text{GRPO}}(\theta) = \frac{1}{G} \sum_{i=1}^G \left[ \min\left(
 
 ---
 
-## 3. Reward Function Architecture & Weight Scaling
+## 3. Decoupled Answer Extraction & Reward Functions
 
-We define two rule-based reward functions and pass them as named functions so TRL logs `rewards/format_reward` and `rewards/correctness_reward` independently during training:
+We extract the final numerical answer using `extract_last_number(text)`, which searches inside `<answer>...</answer>` if tags exist, or extracts the last number from the free-form text if tags are omitted:
 
+```python
+def extract_last_number(text, start_tag="<answer>", end_tag="</answer>"):
+    pattern = re.escape(start_tag) + r"(.*?)" + re.escape(end_tag)
+    matches = re.findall(pattern, text, re.DOTALL)
+    text_to_search = matches[-1] if matches else text
+    numbers = re.findall(r"-?\d+(?:,\d{3})*(?:\.\d+)?", text_to_search)
+    if numbers:
+        return numbers[-1].replace(",", "").strip()
+    return ""
+```
+
+### Reward Weights
 1. **Format Reward (`format_reward`) — Weight: `1.0`**:
    Checks whether the generated text strictly matches the XML structure `^<reasoning>[\s\S]*?</reasoning>\s*<answer>[\s\S]*?</answer>$`.
-   ```python
-   def format_reward(completions, **kwargs):
-       pattern = (
-           r"^<reasoning>[\s\S]*?<\/reasoning>\s*<answer>[\s\S]*?<\/answer>$"
-       )
-       responses = [completion[0]["content"] for completion in completions]
-       return [
-           1.0 if re.match(pattern, response) else 0.0 for response in responses
-       ]
-   ```
 
 2. **Correctness Reward (`correctness_reward`) — Weight: `3.0`**:
-   Extracts the numeric answer inside `<answer>...</answer>` (stripping currency and percent symbols) and compares it to the ground truth value. Weight is scaled to **3.0** to ensure the optimizer prioritizes mathematical accuracy over format-only gains.
-   ```python
-   def correctness_reward(completions, answer, **kwargs):
-       responses = [completion[0]["content"] for completion in completions]
-       extracted = [
-           extract_last_xml_answer(response) for response in responses
-       ]
-       return [
-           3.0 if ext == ans else 0.0 for ext, ans in zip(extracted, answer)
-       ]
-   ```
+   Extracts the numeric answer using `extract_last_number` and compares it to the ground truth value. Weight is scaled to **3.0** to ensure the optimizer prioritizes mathematical accuracy over format-only gains.
 
 ---
 
@@ -73,52 +66,31 @@ We define two rule-based reward functions and pass them as named functions so TR
 | **Max Completion Length**| `384` tokens | Prevents reasoning truncation |
 | **Max Training Steps** | `250` steps (`warmup_steps=25`) | Full convergence over 800 GSM8K training problems |
 | **KL Penalty ($\beta$)** | `0.005` | Low KL penalty permits policy exploration while preventing divergence |
-| **Native Generation** | `use_vllm=False` | Avoids vLLM VRAM allocation conflicts on single GPUs |
 
 ---
 
-## 5. Quantitative 100-Problem GSM8K Benchmark Results
-
-The benchmark evaluated 100 test questions from `openai/gsm8k` test split pre- and post-GRPO alignment:
+## 5. Quantitative Decoupled GSM8K Benchmark Results
 
 ```
 ============================================================
->>> FINAL GSM8K 100-PROBLEM BENCHMARK RESULTS <<<
+>>> DECOUPLED GSM8K 100-PROBLEM BENCHMARK RESULTS <<<
+Extraction Method: Last Number in Text (extract_last_number)
 Pre-GRPO Format Compliance:  0.0%
 Post-GRPO Format Compliance: 90.0%
 Format Compliance Delta:    +90.0%
 
-Pre-GRPO Math Accuracy:      1.0%
+Pre-GRPO Math Accuracy:      33.0%
 Post-GRPO Math Accuracy:     39.0%
-Math Accuracy Delta:        +38.0%
+Math Accuracy Delta:        +6.0%
 ============================================================
 ```
 
 ### Result Discussion
-1. **Format Compliance (0.0% $\rightarrow$ 90.0%)**: The pre-trained 0.5B model completely failed to generate XML tags under system prompt instructions (0/100). GRPO alignment achieved near-perfect compliance (90/100).
-2. **Math Accuracy (1.0% $\rightarrow$ 39.0%)**: Pre-GRPO extracted 1.0% formatted numeric answers. Post-GRPO achieved **39.0% exact accuracy (+38.0% Delta)** on 100 test problems, proving that relative group advantage optimization successfully aligns both format adherence and mathematical calculation.
+1. **Decoupled Math Reasoning (33.0% $\rightarrow$ 39.0%, +6.0% Delta)**: Extracting the last number from the generated text reveals that the un-finetuned base model possessed an underlying 33.0% mathematical reasoning capacity. GRPO training improved raw mathematical reasoning accuracy to **39.0% (+6.0% net reasoning gain)**.
+2. **Format Compliance (0.0% $\rightarrow$ 90.0%, +90.0% Delta)**: Pre-GRPO generated plain text prose without XML tags (0/100). GRPO alignment achieved **90.0% XML tag compliance**.
+3. **Strict Formatted Accuracy (0.0% $\rightarrow$ 39.0%, +39.0% Delta)**: Combining format compliance and mathematical accuracy, strict XML-wrapped accuracy increased from **0.0% to 39.0%**.
 
 ---
 
-## 6. Concrete Inference Output Example
-
-- **Question**: *Janet’s ducks lay 16 eggs per day. She eats three for breakfast every morning and bakes muffins for her friends every day with four. She sells the remainder at the farmers' market daily for $2 per fresh duck egg. How much in dollars does she make every day at the farmers' market?*
-- **Ground Truth Answer**: `18`
-- **Pre-GRPO Output (Base Model)**:
-  > First, we need to determine how many eggs Janet's ducks lay each day... [Plain text prose without XML tags]
-- **Post-GRPO Output (RL Aligned Model)**:
-  ```xml
-  <reasoning>
-  Daily consumption of eggs: 16 - 3 (breakfast) - 4 (baking) = 9 eggs.
-  Selling price per egg: $2.
-
-  Total earnings per day: 9 * $2 = 18.
-  </reasoning>
-  <answer>18</answer>
-  ```
-  - **Status**: **Correct (`18`)**
-
----
-
-## 7. Artifact Outputs
+## 6. Artifact Outputs
 - Saved PEFT LoRA adapter: `qwen2.5-0.5b-grpo-adapter/`
