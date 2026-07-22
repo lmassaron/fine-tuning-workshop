@@ -338,15 +338,15 @@ Math Accuracy Delta:        +33.0%
 ```
 
 #### Trajectory & Key Takeaways:
-1. **Format Compliance (0.0% → 98.0%)**: The pre-trained 0.5B model completely failed to generate XML tags under system prompt instructions (0/100). GRPO alignment achieved near-perfect compliance (98/100).
-2. **Math Accuracy (0.0% → 33.0%)**: Pre-GRPO extracted zero correct formatted numeric answers. Post-GRPO achieved **33.0% exact accuracy (+33.0% Delta)** on 100 test problems, proving that relative group advantage optimization successfully aligns both format adherence and mathematical calculation.
+1. **Format Compliance (0.0% → 90.0%)**: The pre-trained 0.5B model completely failed to generate XML tags under system prompt instructions (0/100). GRPO alignment achieved 90.0% compliance (90/100).
+2. **Math Accuracy (1.0% → 39.0%)**: Pre-GRPO extracted 1.0% formatted numeric answers. Post-GRPO achieved **39.0% exact accuracy (+38.0% Delta)** on 100 test problems, proving that relative group advantage optimization successfully aligns both format adherence and mathematical calculation.
 
 ### D. Purpose of Reinforcement Learning & Model Capabilities
 - **Purpose of RL Alignment**: Supervised fine-tuning maps inputs to static answers, but struggles to teach multi-step logical deduction or enforce consistent output formatting. Reinforcement learning via GRPO forces the model to explore reasoning trajectories. By rewarding correct math calculations and penalizing improper formatting, the model is aligned to consistently structure its thoughts, improving mathematical accuracy.
 - **Capabilities of the Fine-Tuned Model**:
   - **Structured Reasoning**: Systematic output of mathematical steps within `<reasoning>` tags before declaring the final answer, ensuring transparency.
-  - **98% Format Adherence**: Consistently structures responses using XML tags without requiring external runtime validation.
-  - **33% Exact Math Accuracy (+33% Delta)**: Achieves strong mathematical performance on GSM8K word problems.
+  - **90% Format Adherence**: Consistently structures responses using XML tags without requiring external runtime validation.
+  - **39% Exact Math Accuracy (+38% Delta)**: Achieves strong mathematical performance on GSM8K word problems.
 
   #### Structured Math Reasoning Example:
   *   **Prompt**: *"Janet’s ducks lay 16 eggs per day. She eats three for breakfast every morning and bakes muffins for her friends every day with four. She sells the remainder at the farmers' market daily for $2 per fresh duck egg. How much in dollars does she make every day at the farmers' market?"*

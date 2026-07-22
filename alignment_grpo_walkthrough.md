@@ -8,12 +8,12 @@ This walkthrough details the technical architecture, mathematical formulation, r
 
 Mathematical reasoning requires both strict structural compliance (enforcing step-by-step thinking inside `<reasoning>` tags and final numbers inside `<answer>` tags) and numerical accuracy. Standard SFT maps inputs to static answers but fails to incentivize exploration of logical deduction paths.
 
-This track implements **Group Relative Policy Optimization (GRPO)** on **`Qwen/Qwen2.5-0.5B-Instruct`** over 250 steps using reinforcement learning rewards on the `openai/gsm8k` dataset.
+This track implements **Group Relative Policy Optimization (GRPO)** on **`Qwen/Qwen2.5-0.5B-Instruct`** over 250 steps using reinforcement learning rewards on the `openai/gsm8k` dataset with **TRL v1.9.0** (no monkey-patches required).
 
 ### Key Highlights
 - **100-Problem GSM8K Benchmark**: Evaluates pre- and post-GRPO performance on a 100-problem slice of the GSM8K test set.
-- **Format Compliance Jump**: Boosts XML tag adherence from **0.0% to 98.0% (+98.0% Delta)**.
-- **Math Accuracy Delta**: Increases exact extracted math accuracy from **0.0% to 33.0% (+33.0% Delta)**.
+- **Format Compliance Jump**: Boosts XML tag adherence from **0.0% to 90.0% (+90.0% Delta)**.
+- **Math Accuracy Delta**: Increases exact extracted math accuracy from **1.0% to 39.0% (+38.0% Delta)**.
 - **Critic-Free RL**: Eliminates the 50% VRAM overhead of a value network by estimating advantages relative to group rollouts.
 
 ---
@@ -67,9 +67,10 @@ We define two rule-based reward functions and pass them as named functions so TR
 | Parameter | Value | Rationale |
 | :--- | :--- | :--- |
 | **Base Model** | `Qwen/Qwen2.5-0.5B-Instruct` | 0.5B parameters; ideal capacity for fast, non-trivial RL exploration |
+| **Framework Version** | `trl==1.9.0` | Modern TRL release; returns pure booleans without monkey patches |
 | **Generations per Prompt** | `num_generations=4` | Samples 4 rollouts per prompt to estimate group advantage |
 | **Batch Size** | `2` per device $\times$ `4` grad accum | Effective Batch Size of 8 prompts (32 rollouts per optimization step) |
-| **Max Prompt / Completion**| `256` / `384` tokens | Prevents reasoning truncation |
+| **Max Completion Length**| `384` tokens | Prevents reasoning truncation |
 | **Max Training Steps** | `250` steps (`warmup_steps=25`) | Full convergence over 800 GSM8K training problems |
 | **KL Penalty ($\beta$)** | `0.005` | Low KL penalty permits policy exploration while preventing divergence |
 | **Native Generation** | `use_vllm=False` | Avoids vLLM VRAM allocation conflicts on single GPUs |
@@ -84,18 +85,18 @@ The benchmark evaluated 100 test questions from `openai/gsm8k` test split pre- a
 ============================================================
 >>> FINAL GSM8K 100-PROBLEM BENCHMARK RESULTS <<<
 Pre-GRPO Format Compliance:  0.0%
-Post-GRPO Format Compliance: 98.0%
-Format Compliance Delta:    +98.0%
+Post-GRPO Format Compliance: 90.0%
+Format Compliance Delta:    +90.0%
 
-Pre-GRPO Math Accuracy:      0.0%
-Post-GRPO Math Accuracy:     33.0%
-Math Accuracy Delta:        +33.0%
+Pre-GRPO Math Accuracy:      1.0%
+Post-GRPO Math Accuracy:     39.0%
+Math Accuracy Delta:        +38.0%
 ============================================================
 ```
 
 ### Result Discussion
-1. **Format Compliance (0.0% $\rightarrow$ 98.0%)**: The pre-trained 0.5B model completely failed to generate XML tags under system prompt instructions (0/100). GRPO alignment achieved near-perfect compliance (98/100).
-2. **Math Accuracy (0.0% $\rightarrow$ 33.0%)**: Pre-GRPO extracted zero correct formatted numeric answers. Post-GRPO achieved **33.0% exact accuracy (+33.0% Delta)** on 100 test problems, proving that relative group advantage optimization successfully aligns both format adherence and mathematical calculation.
+1. **Format Compliance (0.0% $\rightarrow$ 90.0%)**: The pre-trained 0.5B model completely failed to generate XML tags under system prompt instructions (0/100). GRPO alignment achieved near-perfect compliance (90/100).
+2. **Math Accuracy (1.0% $\rightarrow$ 39.0%)**: Pre-GRPO extracted 1.0% formatted numeric answers. Post-GRPO achieved **39.0% exact accuracy (+38.0% Delta)** on 100 test problems, proving that relative group advantage optimization successfully aligns both format adherence and mathematical calculation.
 
 ---
 
@@ -104,7 +105,7 @@ Math Accuracy Delta:        +33.0%
 - **Question**: *Janet’s ducks lay 16 eggs per day. She eats three for breakfast every morning and bakes muffins for her friends every day with four. She sells the remainder at the farmers' market daily for $2 per fresh duck egg. How much in dollars does she make every day at the farmers' market?*
 - **Ground Truth Answer**: `18`
 - **Pre-GRPO Output (Base Model)**:
-  > To calculate how much Janet makes at the farmers' market each day, we need to consider both the earnings from selling the eggs and the costs... [Plain text prose without XML tags]
+  > First, we need to determine how many eggs Janet's ducks lay each day... [Plain text prose without XML tags]
 - **Post-GRPO Output (RL Aligned Model)**:
   ```xml
   <reasoning>
