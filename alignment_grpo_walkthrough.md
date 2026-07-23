@@ -13,9 +13,9 @@ This track implements **Group Relative Policy Optimization (GRPO)** on **`Qwen/Q
 ### Key Highlights
 - **100-Problem GSM8K Benchmark**: Evaluates pre- and post-GRPO performance on a 100-problem slice of the GSM8K test set.
 - **Decoupled Math Extraction Rule**: Decouples formatting compliance from raw reasoning ability by extracting the last number appearing in the generated text (`extract_last_number`).
-- **Decoupled Math Reasoning Accuracy**: Increases raw math reasoning accuracy from **30.0% to 41.0% (+11.0% Net Reasoning Delta)**.
-- **Strict Formatted Math Accuracy**: Increases strict XML-wrapped accuracy from **0.0% to 41.0% (+41.0% Strict Delta)**.
-- **Format Compliance Jump**: Boosts XML tag adherence from **0.0% to 81.0% (+81.0% Format Delta)**.
+- **Decoupled Math Reasoning Accuracy**: Increases raw math reasoning accuracy from **31.0% to 51.0% (+20.0% Net Reasoning Delta)**.
+- **Strict Formatted Math Accuracy**: Increases strict XML-wrapped accuracy from **0.0% to 51.0% (+51.0% Strict Delta)**.
+- **Format Compliance Jump**: Boosts XML tag adherence from **0.0% to 92.0% (+92.0% Format Delta)**.
 
 ---
 
@@ -76,19 +76,19 @@ def extract_last_number(text, start_tag="<answer>", end_tag="</answer>"):
 >>> DECOUPLED GSM8K 100-PROBLEM BENCHMARK RESULTS <<<
 Extraction Method: Last Number in Text (extract_last_number)
 Pre-GRPO Format Compliance:  0.0%
-Post-GRPO Format Compliance: 81.0%
-Format Compliance Delta:    +81.0%
+Post-GRPO Format Compliance: 92.0%
+Format Compliance Delta:    +92.0%
 
-Pre-GRPO Math Accuracy:      30.0%
-Post-GRPO Math Accuracy:     41.0%
-Math Accuracy Delta:        +11.0%
+Pre-GRPO Math Accuracy:      31.0%
+Post-GRPO Math Accuracy:     51.0%
+Math Accuracy Delta:        +20.0%
 ============================================================
 ```
 
 ### Result Discussion
-1. **Decoupled Math Reasoning (30.0% $\rightarrow$ 41.0%, +11.0% Delta)**: Extracting the last number from the generated text reveals that the un-finetuned base model possessed an underlying 30.0% mathematical reasoning capacity. GRPO training improved raw mathematical reasoning accuracy to **41.0% (+11.0% net reasoning gain)**.
-2. **Format Compliance (0.0% $\rightarrow$ 81.0%, +81.0% Delta)**: Pre-GRPO generated plain text prose without XML tags (0/100). GRPO alignment achieved **81.0% XML tag compliance**.
-3. **Strict Formatted Accuracy (0.0% $\rightarrow$ 41.0%, +41.0% Delta)**: Combining format compliance and mathematical accuracy, strict XML-wrapped accuracy increased from **0.0% to 41.0%**.
+1. **Decoupled Math Reasoning (31.0% → 51.0%, +20.0% Delta)**: Extracting the last number from the generated text reveals that the un-finetuned base model possessed an underlying 31.0% mathematical reasoning capacity. GRPO training improved raw mathematical reasoning accuracy to **51.0% (+20.0% net reasoning gain)**.
+2. **Format Compliance (0.0% → 92.0%, +92.0% Delta)**: Pre-GRPO generated plain text prose without XML tags (0/100). GRPO alignment achieved **92.0% XML tag compliance**.
+3. **Strict Formatted Accuracy (0.0% → 51.0%, +51.0% Delta)**: Combining format compliance and mathematical accuracy, strict XML-wrapped accuracy increased from **0.0% to 51.0%**.
 
 ---
 
