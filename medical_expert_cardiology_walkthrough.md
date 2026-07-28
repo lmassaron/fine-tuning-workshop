@@ -58,7 +58,8 @@ Unsloth requires `import unsloth` to be called **before** importing `transformer
 | **Batch Size** | `2` per device | Fits within 16GB VRAM limit |
 | **Gradient Accumulation** | `4` | Yields an **Effective Batch Size of 8** |
 | **Learning Rate** | `2e-4` | Standard initial learning rate for QLoRA adaptation |
-| **Warmup Steps** | `10` | Prevents initial gradient instability |
+| **Warmup Steps** | `0` | Direct learning rate schedule starting immediately |
+| **Logging / Eval Steps** | `50` steps | Standardized logging and evaluation step interval |
 | **Max Training Steps** | `100` | Full convergence over cardiology dialogue dataset |
 | **Precision** | `bf16` | Brain floating-point 16-bit execution on Ampere/Hopper GPUs |
 | **KV Cache** | Disabled (`use_cache=False`) | Reduces memory consumption during backward pass |
@@ -91,10 +92,10 @@ with torch.no_grad():
 ```
 
 ### Validation Benchmark Results
-- **Average Evaluation Perplexity**: **4.4341**
-- **Specific Clinical Case Perplexity (Aortic Dissection)**: **1.5286**
+- **Average Evaluation Perplexity**: **4.4135**
+- **Specific Clinical Case Perplexity (Aortic Dissection)**: **1.5121**
 
-A perplexity of **4.43** demonstrates that the fine-tuned model assigns extremely high probability to expert cardiology terminology and diagnostic guidelines.
+A perplexity of **4.41** demonstrates that the fine-tuned model assigns extremely high probability to expert cardiology terminology and diagnostic guidelines.
 
 ---
 
@@ -104,9 +105,9 @@ A perplexity of **4.43** demonstrates that the fine-tuned model assigns extremel
 - **Expected Answer**: *"Connective tissue disorders that increase the risk of aortic dissection include Marfan syndrome, Ehlers-Danlos syndrome, and Loeys-Dietz syndrome. These conditions affect the structural integrity of the arterial walls."*
 - **Model Generated Output**:
   ```
-  Connective tissue disorders such as Marfan syndrome, Ehlers-Danlos syndrome, and Loeys-Dietz syndrome are known to increase the risk of aortic dissection. These conditions affect the body's connective tissue, which can weaken the aortic wall and make it more susceptible to dissection.
+  Connective tissue disorders such as Marfan syndrome, Ehlers-Danlos syndrome, and Loeys-Dietz syndrome increase the risk of aortic dissection due to their impact on the structural integrity of the aorta.
   ```
-- **Target Perplexity**: **1.5286**
+- **Target Perplexity**: **1.5121**
 
 ---
 

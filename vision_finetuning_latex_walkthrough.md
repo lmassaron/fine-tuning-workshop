@@ -57,7 +57,8 @@ In `SFTConfig`, set `remove_unused_columns = False`. Standard Hugging Face train
 
 - **Data Collator**: `UnslothVisionDataCollator(model, tokenizer)` — handles image patchification, 2D positional grid embeddings, and token sequence alignment automatically.
 - **Batch Size**: 2 per device $\times$ 4 gradient accumulation steps = **Effective Batch Size 8**
-- **Learning Rate**: `2e-4` with warmup over 5 steps for 30 max training steps.
+- **Learning Rate**: `2e-4` with `warmup_steps=0` for 30 max training steps.
+- **Logging / Eval Steps**: `50` steps for checkpointing and evaluation.
 - **Precision**: `bf16` compute dtype.
 
 ---
