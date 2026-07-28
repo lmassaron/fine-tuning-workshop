@@ -10,7 +10,7 @@ The goal of this notebook is to adapt an NVIDIA Nemotron embedding model for dom
 
 ### Key Highlights
 - **Synthetic Data Generation**: Uses `Qwen/Qwen2.5-1.5B-Instruct` (quantized to 4-bit) to auto-generate high-quality synthetic questions (anchors) from raw document chunks (positives).
-- **LoRA Fine-Tuning**: Applies Low-Rank Adaptation (LoRA) to target projection matrices (`q_proj`, `k_proj`, `v_proj`, `o_proj`) of `nvidia/Nemotron-3-Embed-1B-BF16`.
+- **LoRA Fine-Tuning**: Applies Low-Rank Adaptation (LoRA) to target projection matrices (`all-linear`) of `nvidia/Nemotron-3-Embed-1B-BF16`.
 - **Metric Learning Loss**: Uses `MultipleNegativesRankingLoss` (MNRL) for contrastive retrieval learning using in-batch negatives.
 - **Evaluation**: Evaluates retrieval accuracy using strict **Recall@1** by comparing similarity matrices before and after fine-tuning.
 
@@ -20,9 +20,9 @@ The goal of this notebook is to adapt an NVIDIA Nemotron embedding model for dom
 
 ### 1. Environment & Package Setup
 ```bash
-pip install -q -U "torchao>=0.16.0" sentence-transformers datasets accelerate peft trl transformers bitsandbytes
+pip install -q -U bitsandbytes "torchao>=0.16.0" sentence-transformers datasets accelerate peft trl transformers
 ```
-Installs core dependencies: `transformers`, `sentence-transformers` for embedding fine-tuning, `peft` for LoRA, `bitsandbytes` for 4-bit LLM quantization, and `datasets` for data handling.
+Installs core dependencies: `transformers`, `sentence-transformers` for embedding fine-tuning, `peft` for LoRA, `bitsandbytes` for 4-bit LLM quantization, `torchao`, and `datasets` for data handling.
 
 ---
 
@@ -30,10 +30,25 @@ Installs core dependencies: `transformers`, `sentence-transformers` for embeddin
 Loads the NVIDIA technical documentation dataset:
 ```python
 raw_ds = load_dataset("nvidia/Retrieval-Synthetic-NVDocs-v1", split="train[:5000]")
-sample_ds = raw_ds.shuffle(seed=42).select(range(min(3_000, len(raw_ds))))
+sample_ds = raw_ds.shuffle(seed=42).select(range(min(3000, len(raw_ds))))
 ```
 - **Source**: `nvidia/Retrieval-Synthetic-NVDocs-v1`
 - **Sampling**: 3,000 random document records are selected to form the basis for synthetic pair generation.
+
+#### Domain-Specific Retrieval Datasets Reference
+
+| Dataset | Why it fits | Hugging Face URL |
+| :--- | :--- | :--- |
+| `nvidia/Retrieval-Synthetic-NVDocs-v1` | Synthetic retrieval over NVIDIA documents. | https://huggingface.co/datasets/nvidia/Retrieval-Synthetic-NVDocs-v1 |
+| `Taylor658/synthetic-legal` | Synthetic legal text dataset | https://huggingface.co/datasets/Taylor658/synthetic-legal |
+| `microsoft/mediflow` | Large medical instruction dataset with retrieval/IR-adjacent examples and clinically grounded text. | https://huggingface.co/datasets/microsoft/mediflow |
+| `abhinand/MedEmbed-training-triplets-v1` | Synthetic triplets for medical retrieval training | https://huggingface.co/datasets/abhinand/MedEmbed-training-triplets-v1 |
+| `HFforLegal/case-law` | Large legal corpus useful for retrieval indexing and RAG over legal decisions. | https://huggingface.co/datasets/HFforLegal/case-law |
+| `isaacus/legal-rag-bench` | Retrieval-focused legal RAG dataset from a legal collection. | https://huggingface.co/datasets/isaacus/legal-rag-bench |
+| `isaacus/legal-rag-qa` | Legal RAG QA dataset, good for retrieval-style benchmarking. | https://huggingface.co/datasets/isaacus/legal-rag-qa |
+| `isaacus/contractual-clause-retrieval` | Explicit legal retrieval dataset centered on clause search. | https://huggingface.co/datasets/isaacus/contractual-clause-retrieval |
+| `PatronusAI/financebench` | Finance-domain benchmark often used for retrieval over financial documents. | https://huggingface.co/datasets/PatronusAI/financebench |
+| `c3po-ai/edgar-corpus` | SEC filings corpus, useful for long-document financial retrieval. | https://huggingface.co/datasets/c3po-ai/edgar-corpus |
 
 ---
 
@@ -60,11 +75,11 @@ Each output forms an `(anchor, positive)` pair:
 ### 4. Dataset Preparation & Train/Eval Split
 ```python
 pair_ds = sample_ds.map(generate_synthetic_pair, remove_columns=sample_ds.column_names)
-split_ds = pair_ds.train_test_split(test_size=0.1, seed=42)
+split_ds = pair_ds.train_test_split(test_size=0.2, seed=42)
 train_ds = split_ds["train"]
 eval_ds  = split_ds["test"]
 ```
-The resulting pair dataset is split into **90% Training** and **10% Evaluation** sets.
+The resulting pair dataset is split into **80% Training** and **20% Evaluation** sets (seed 42).
 
 ---
 
@@ -86,7 +101,7 @@ lora_config = LoraConfig(
 - **Rank (`r`)**: 8
 - **Alpha (`lora_alpha`)**: 16
 - **Target Modules**: `"all-linear"` (targets all linear projections in the transformer backbone)
-- **Trainable Parameters**: `5,242,880` out of `1,146,161,152` total parameters (**0.4574%** trainable)
+- **Trainable Parameters**: `2,097,152` out of `1,143,015,424` total parameters (**0.1835%** trainable)
 
 ---
 
@@ -99,10 +114,12 @@ args = SentenceTransformerTrainingArguments(
     output_dir="./nemotron-embed-finetuned",
     num_train_epochs=1,
     per_device_train_batch_size=2,
+    per_device_eval_batch_size=2,
     learning_rate=2e-4,
     bf16=True,
     logging_steps=50,
     save_strategy="no",
+    report_to="none",
 )
 
 trainer = SentenceTransformerTrainer(
@@ -112,13 +129,12 @@ trainer.train()
 ```
 - **Loss Function**: `MultipleNegativesRankingLoss` treats other document samples in the mini-batch as negative examples for each query anchor.
 - **Precision**: `bf16` enabled for fast GPU compute.
-- **Training Performance**: Completed 1,350 steps (1 epoch) with final `training_loss = 0.02546`.
 
 ---
 
 ### 7. Evaluation & Strict Recall@1 Comparison
 
-The performance is evaluated on the 10% test set (300 evaluation query-document pairs) using cosine similarity matrix computation:
+The performance is evaluated on the 20% test set using cosine similarity matrix computation:
 
 ```python
 def evaluate_retrieval(model, model_name):
@@ -132,10 +148,10 @@ def evaluate_retrieval(model, model_name):
     return recall_at_1
 ```
 
-#### Actual Benchmark Results:
-- **Baseline Model (`nvidia/Nemotron-3-Embed-1B-BF16`)**: **39.00%** Strict Recall@1
-- **Fine-Tuned Model (LoRA Adapter)**: **81.67%** Strict Recall@1
-- **Absolute Improvement**: **+42.67%** boost in retrieval accuracy after fine-tuning on synthetic data.
+#### Benchmark Results:
+- **Original Model (`nvidia/Nemotron-3-Embed-1B-BF16`)**: **33.17%** Strict Recall@1
+- **Fine-Tuned Model (LoRA Adapter)**: **73.67%** Strict Recall@1
+- **Absolute Improvement**: **+40.50%** boost in retrieval accuracy after fine-tuning.
 
 ---
 
