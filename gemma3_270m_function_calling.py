@@ -57,12 +57,14 @@ class Config:
         "lr_scheduler_type": "cosine",
         "warmup_ratio": 0.1,
         "gradient_checkpointing": True,
+        "gradient_checkpointing_kwargs": {"use_reentrant": False},
         "eval_strategy": "epoch",
         "save_strategy": "epoch",
         "load_best_model_at_end": True,
         "metric_for_best_model": "eval_loss",
         "logging_steps": 5,
         "report_to": "tensorboard",
+        "loss_type": "nll",
     }
     
 def main():
@@ -135,8 +137,11 @@ def main():
         target_modules=config.lora_arguments["target_modules"],
         task_type="CAUSAL_LM",
         bias="none",
+        ensure_weight_tying=True,
     )
 
+    model.config.use_cache = False
+    
     # 6. Initialize Training Configuration
     training_args = SFTConfig(
         output_dir=config.output_dir,
