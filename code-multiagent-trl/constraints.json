@@ -1,0 +1,28 @@
+{
+  "system_constraints": {
+    "model": {
+      "base_model": "unsloth/Qwen3.5-4B",
+      "quantization": "4-bit",
+      "framework": "trl-peft-transformers",
+      "max_seq_length": 2048,
+      "device": "cuda"
+    },
+    "tools": {
+      "available": ["read_file", "write_file", "list_files"],
+      "output_format": "JSON only",
+      "max_retries": 3
+    },
+    "roles": {
+      "planner": "Break down requests into executable steps",
+      "coder": "Execute tool calls based on steps",
+      "reviewer": "QA review of execution results"
+    },
+    "execution": {
+      "step_processing": "Sequential execution with context accumulation",
+      "failure_handling": "Continue on failure, log errors",
+      "context_format": "Step name, tool used, result"
+    },
+    "vram_limit": "16GB",
+    "response_format": "JSON only for tool calls"
+  }
+}

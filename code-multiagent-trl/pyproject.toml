@@ -1,0 +1,21 @@
+[project]
+name = "code-multiagent-trl"
+version = "0.1.0"
+description = "Local Coding Multi-Agent System with Dynamic LoRA Hot-Swapping using TRL and PEFT"
+readme = "tutorial.md"
+requires-python = ">=3.12"
+dependencies = [
+    "torch",
+    "torchvision",
+    "torchaudio",
+    "transformers",
+    "accelerate",
+    "bitsandbytes",
+    "peft",
+    "datasets",
+    "trl"
+]
+
+[tool.uv]
+index-url = "https://pypi.org/simple"
+extra-index-url = ["https://download.pytorch.org/whl/cu130"]
