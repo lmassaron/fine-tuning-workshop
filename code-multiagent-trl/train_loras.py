@@ -71,9 +71,9 @@ def train_lora(model, tokenizer, dataset, output_name, push_repo_name):
             dataset_text_field="text",
             max_length=MAX_SEQ_LENGTH,
             eos_token="<|im_end|>",
-            # Training Duration
-            num_train_epochs=2,
-            # Batching & Throughput
+            # Training Duration: 1 epoch capped under 4h total
+            num_train_epochs=1,
+            # Batching & Throughput (Safe for 16GB VRAM)
             per_device_train_batch_size=2,
             gradient_accumulation_steps=8,  # Effective batch size = 16
             gradient_checkpointing=True,
@@ -90,7 +90,7 @@ def train_lora(model, tokenizer, dataset, output_name, push_repo_name):
             # Checkpointing & Logging
             logging_steps=10,
             save_strategy="steps",
-            save_steps=200,
+            save_steps=50,
             save_total_limit=2,
             output_dir=f"outputs_{output_name}",
         ),
@@ -158,10 +158,10 @@ def run_pipeline():
     gc.collect()
     torch.cuda.empty_cache()
 
-    # 2. CODER / TOOL USER
+    # 2. CODER / TOOL USER (1 epoch, ~1200 samples, ~1.5h)
     model, tokenizer = prepare_base_model(BASE_MODEL_ID)
     coder_ds = load_dataset(
-        "NousResearch/hermes-function-calling-v1", split="train[:5000]"
+        "NousResearch/hermes-function-calling-v1", split="train[:1200]"
     )
     coder_ds = coder_ds.map(
         format_coder_data, batched=True, remove_columns=coder_ds.column_names
@@ -171,15 +171,14 @@ def run_pipeline():
     gc.collect()
     torch.cuda.empty_cache()
 
-    # 3. REVIEWER
+    # 3. REVIEWER (1 epoch, ~1200 samples, ~1.5h)
     model, tokenizer = prepare_base_model(BASE_MODEL_ID)
     reviewer_ds = load_dataset(
-        "m-a-p/CodeFeedback-Filtered-Instruction", split="train[:5000]"
+        "m-a-p/CodeFeedback-Filtered-Instruction", split="train[:1200]"
     )
     reviewer_ds = reviewer_ds.map(
         format_reviewer_data, batched=True, remove_columns=reviewer_ds.column_names
     )
-
     train_lora(
         model, tokenizer, reviewer_ds, "reviewer", f"{HF_USERNAME}/reviewer-lora"
     )
