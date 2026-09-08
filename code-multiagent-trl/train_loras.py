@@ -70,16 +70,28 @@ def train_lora(model, tokenizer, dataset, output_name, push_repo_name):
         args=SFTConfig(
             dataset_text_field="text",
             max_length=MAX_SEQ_LENGTH,
-            dataset_kwargs={"skip_prepare_dataset": False},
-            dataset_num_proc=None,
             eos_token="<|im_end|>",
+            # Training Duration
+            num_train_epochs=2,
+            # Batching & Throughput
             per_device_train_batch_size=2,
-            gradient_accumulation_steps=4,
-            max_steps=60,
-            learning_rate=2e-4,
-            bf16=True if torch.cuda.is_bf16_supported() else False,
+            gradient_accumulation_steps=8,  # Effective batch size = 16
+            gradient_checkpointing=True,
+            gradient_checkpointing_kwargs={"use_reentrant": False},
+            # Learning Rate & Schedule
+            learning_rate=1e-4,
+            lr_scheduler_type="cosine",
+            warmup_ratio=0.04,
+            weight_decay=0.01,
+            # Optimizer & Precision
+            optim="paged_adamw_8bit",
+            bf16=torch.cuda.is_bf16_supported(),
             fp16=not torch.cuda.is_bf16_supported(),
-            logging_steps=1,
+            # Checkpointing & Logging
+            logging_steps=10,
+            save_strategy="steps",
+            save_steps=200,
+            save_total_limit=2,
             output_dir=f"outputs_{output_name}",
         ),
     )
@@ -149,7 +161,7 @@ def run_pipeline():
     # 2. CODER / TOOL USER
     model, tokenizer = prepare_base_model(BASE_MODEL_ID)
     coder_ds = load_dataset(
-        "NousResearch/hermes-function-calling-v1", split="train[:1000]"
+        "NousResearch/hermes-function-calling-v1", split="train[:5000]"
     )
     coder_ds = coder_ds.map(
         format_coder_data, batched=True, remove_columns=coder_ds.column_names
@@ -162,7 +174,7 @@ def run_pipeline():
     # 3. REVIEWER
     model, tokenizer = prepare_base_model(BASE_MODEL_ID)
     reviewer_ds = load_dataset(
-        "m-a-p/CodeFeedback-Filtered-Instruction", split="train[:1000]"
+        "m-a-p/CodeFeedback-Filtered-Instruction", split="train[:5000]"
     )
     reviewer_ds = reviewer_ds.map(
         format_reviewer_data, batched=True, remove_columns=reviewer_ds.column_names
