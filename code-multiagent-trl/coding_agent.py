@@ -16,48 +16,49 @@ LORA_ADAPTERS = {
     "coder": "lmassaron/coder-lora",
     "reviewer": "lmassaron/reviewer-lora",
 }
-# ------------------------------------------------------------------
+
+def prepare_base_model(base_model_id: str):
+    """Loads tokenizer and 4-bit quantized base model."""
+    print(f"[LoRAManager] Loading base model: {base_model_id} (4-bit NF4)...")
+    tokenizer = AutoTokenizer.from_pretrained(base_model_id, trust_remote_code=True)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    compute_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=compute_dtype,
+        bnb_4bit_use_double_quant=True,
+    )
+
+    base_model = AutoModelForCausalLM.from_pretrained(
+        base_model_id,
+        quantization_config=bnb_config,
+        device_map="auto",
+        dtype=compute_dtype,
+        trust_remote_code=True,
+    )
+    return base_model, tokenizer
+
+
+def load_adapters(base_model, adapters: dict):
+    """Loads and attaches PEFT LoRA adapters to the base model."""
+    model = PeftModel.from_pretrained(
+        base_model, adapters["planner"], adapter_name="planner"
+    )
+    model.load_adapter(adapters["coder"], adapter_name="coder")
+    model.load_adapter(adapters["reviewer"], adapter_name="reviewer")
+    model.eval()
+    return model
 
 
 class LoRAManager:
     """Dynamically swaps LoRA adapters on a single base model using pure Hugging Face PEFT."""
 
     def __init__(self):
-        print(f"[LoRAManager] Loading base model: {BASE_MODEL_ID} (4-bit NF4)...")
-
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            BASE_MODEL_ID,
-            trust_remote_code=True,
-        )
-        if self.tokenizer.pad_token is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token
-
-        self.compute_dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
-
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=self.compute_dtype,
-            bnb_4bit_use_double_quant=True,
-        )
-
-        base_model = AutoModelForCausalLM.from_pretrained(
-            BASE_MODEL_ID,
-            quantization_config=bnb_config,
-            device_map="auto",
-            dtype=self.compute_dtype,
-            trust_remote_code=True,
-        )
-
-        self.model = PeftModel.from_pretrained(
-            base_model,
-            LORA_ADAPTERS["planner"],
-            adapter_name="planner",
-        )
-        self.model.load_adapter(LORA_ADAPTERS["coder"], adapter_name="coder")
-        self.model.load_adapter(LORA_ADAPTERS["reviewer"], adapter_name="reviewer")
-        self.model.eval()
-
+        base_model, self.tokenizer = prepare_base_model(BASE_MODEL_ID)
+        self.model = load_adapters(base_model, LORA_ADAPTERS)
         self.active_adapter = "planner"
 
     def set_role(self, role_name: str):
@@ -141,11 +142,8 @@ def extract_plan_steps(plan_text: str) -> list[str]:
     return steps
 
 
-def run_agent(user_request: str):
-    print(f"🚀 Goal: {user_request}\n")
-    manager = LoRAManager()
-
-    # PHASE 1: PLANNING
+def create_plan(manager: LoRAManager, user_request: str) -> list[str]:
+    """Generates and extracts execution steps using the planner role."""
     manager.set_role("planner")
     plan_prompt = f"""
     You are a Senior Software Architect. Break down this request into a series of small, executable steps.
@@ -155,91 +153,96 @@ def run_agent(user_request: str):
     """
     plan = manager.generate(
         plan_prompt,
-        system_prompt="You are a Senior Software Architect. Output only the execution steps inside <plan>...</plan> tags without drafting commentary."
+        system_prompt="You are a Senior Software Architect. Output only the execution steps inside <plan>...</plan> tags without drafting commentary.",
     )
-    print(f"📋 Plan Output:\n{plan}\n")
+    print(f"  Plan Output:\n{plan}\n")
 
     steps = extract_plan_steps(plan)
     if not steps:
-        print("⚠️ Warning: No numbered steps found in plan. Falling back to direct task execution.")
+        print("  Warning: No numbered steps found in plan. Falling back to direct task execution.")
         steps = [f"1. Implement solution for: {user_request}"]
+    return steps
 
-    print("📋 Parsed Steps for Execution:")
+
+def execute_tool(tool_name: str, tool_data: dict) -> str:
+    """Dispatches tool execution to the appropriate tool function."""
+    if tool_name == "write_file":
+        return write_file(tool_data.get("path", ""), tool_data.get("content", ""))
+    elif tool_name == "read_file":
+        return read_file(tool_data.get("path", ""))
+    elif tool_name == "list_files":
+        return list_files(tool_data.get("path", "."))
+    return f"Unknown tool: {tool_name}"
+
+
+def execute_step(manager: LoRAManager, step: str, context: str, max_retries: int = 3):
+    """Executes a single step with coder role, retrying on JSON decode errors."""
+    manager.set_role("coder")
+    for attempt in range(max_retries):
+        tool_prompt = f"Context:\n{context}\n\nTask: {step}\n{AVAILABLE_TOOLS_SCHEMA}"
+        response = manager.generate(
+            tool_prompt,
+            system_prompt="You are a strict tool-calling engine. Output JSON only.",
+        )
+
+        try:
+            json_match = re.search(r"\{.*\}", response, re.DOTALL)
+            if not json_match:
+                print(f"    Attempt {attempt + 1}: Failed to find JSON.")
+                continue
+
+            tool_data = json.loads(json_match.group(0))
+            tool_name = tool_data.get("tool")
+            result = execute_tool(tool_name, tool_data)
+
+            print(f"    Tool used: {tool_name} on {tool_data.get('path', '')}")
+            print(f"    Output: {result[:100]}...")
+
+            new_context = context + f"\nStep '{step}' completed using tool '{tool_name}'. Result: {result}\n"
+            return True, new_context
+
+        except json.JSONDecodeError:
+            print(f"    Attempt {attempt + 1}: Invalid JSON.")
+        except Exception as e:
+            print(f"    Error executing step: {e}")
+
+    return False, context
+
+
+def review_step(manager: LoRAManager, step: str, context: str):
+    """Reviews the execution result using the reviewer role."""
+    manager.set_role("reviewer")
+    review_prompt = f"""
+    QA Review task: "{step}"
+    Output: {context}
+    Did the execution achieve the task properly? Reply 'PASS' or 'FAIL'.
+    """
+    review = manager.generate(review_prompt, "You are a strict QA bot.")
+    if "FAIL" in review.upper():
+        print(f"    Reviewer evaluation: {review.strip()[:100]}")
+    else:
+        print("    Reviewer passed the step.")
+
+
+def run_agent(user_request: str):
+    print(f". Goal: {user_request}\n")
+    manager = LoRAManager()
+
+    steps = create_plan(manager, user_request)
+    print(". Parsed Steps for Execution:")
     for s in steps:
         print(f"  - {s}")
     print()
 
-    # PHASE 2: EXECUTION LOOP
     context = ""
-
     for step in steps:
-        print(f"⚙️ Executing: {step}")
-        max_retries = 3
-        step_success = False
-
-        for attempt in range(max_retries):
-            # 2a: Generate Tool Call
-            manager.set_role("coder")
-            tool_prompt = (
-                f"Context:\n{context}\n\nTask: {step}\n{AVAILABLE_TOOLS_SCHEMA}"
-            )
-
-            response = manager.generate(
-                tool_prompt,
-                system_prompt="You are a strict tool-calling engine. Output JSON only.",
-            )
-
-            # Extract JSON
-            try:
-                json_match = re.search(r"\{.*\}", response, re.DOTALL)
-                if not json_match:
-                    print(f"  ⚠️ Attempt {attempt + 1}: Failed to find JSON.")
-                    continue
-
-                tool_data = json.loads(json_match.group(0))
-                tool_name = tool_data.get("tool")
-
-                # EXECUTE
-                result = ""
-                if tool_name == "write_file":
-                    result = write_file(
-                        tool_data.get("path", ""), tool_data.get("content", "")
-                    )
-                elif tool_name == "read_file":
-                    result = read_file(tool_data.get("path", ""))
-                elif tool_name == "list_files":
-                    result = list_files(tool_data.get("path", "."))
-                else:
-                    result = f"Unknown tool: {tool_name}"
-
-                print(f"    Tool used: {tool_name} on {tool_data.get('path', '')}")
-                print(f"    Output: {result[:100]}...")
-
-                context += f"\nStep '{step}' completed using tool '{tool_name}'. Result: {result}\n"
-                step_success = True
-                break
-
-            except json.JSONDecodeError:
-                print(f"    Attempt {attempt + 1}: Invalid JSON.")
-            except Exception as e:
-                print(f"    Error executing step: {e}")
-
+        print(f". Executing: {step}")
+        step_success, context = execute_step(manager, step, context)
         if not step_success:
             print("    Failed step.")
             continue
 
-        # PHASE 3: REVIEW
-        manager.set_role("reviewer")
-        review_prompt = f"""
-        QA Review task: "{step}"
-        Output: {context}
-        Did the execution achieve the task properly? Reply 'PASS' or 'FAIL'.
-        """
-        review = manager.generate(review_prompt, "You are a strict QA bot.")
-        if "FAIL" in review.upper():
-            print(f"    Reviewer evaluation: {review.strip()[:100]}")
-        else:
-            print("    Reviewer passed the step.")
+        review_step(manager, step, context)
 
     print("\n✨ Mission Complete.")
 
