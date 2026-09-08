@@ -8,7 +8,6 @@ from trl import SFTTrainer, SFTConfig
 
 disable_caching()
 
-# --- CONFIGURATION ---
 BASE_MODEL_ID = "unsloth/Qwen3.5-4B"
 HF_USERNAME = "lmassaron"  # Replace with your Hugging Face username
 MAX_SEQ_LENGTH = 2048
@@ -55,13 +54,8 @@ def train_lora(model, tokenizer, dataset, output_name, push_repo_name):
         r=16,
         lora_alpha=16,
         target_modules=[
-            "q_proj",
-            "k_proj",
-            "v_proj",
-            "o_proj",
-            "gate_proj",
-            "up_proj",
-            "down_proj",
+            "q_proj", "k_proj", "v_proj", "o_proj",
+            "gate_proj", "up_proj", "down_proj",
         ],
         lora_dropout=0.05,
         bias="none",
@@ -103,14 +97,14 @@ def train_lora(model, tokenizer, dataset, output_name, push_repo_name):
         trainer.model.push_to_hub(push_repo_name)
         tokenizer.push_to_hub(push_repo_name)
     except Exception as e:
-        print(f"Skipping Hugging Face push due to error (perhaps not logged in?): {e}")
+        print(f"Skipping Hugging Face push due to error: {e}")
 
 
-def run_pipeline():
-    print("Initializing LoRA Factory Pipeline (TRL Edition)...")
+def prepare_base_model(base_model_id):
+    print("Initializing base model and tokenizer...")
 
     tokenizer = AutoTokenizer.from_pretrained(
-        BASE_MODEL_ID,
+        base_model_id,
         trust_remote_code=True,
     )
     if tokenizer.pad_token is None:
@@ -120,35 +114,53 @@ def run_pipeline():
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,
+        bnb_4bit_compute_dtype=torch.bfloat16
+        if torch.cuda.is_bf16_supported()
+        else torch.float16,
         bnb_4bit_use_double_quant=True,
     )
 
     model = AutoModelForCausalLM.from_pretrained(
-        BASE_MODEL_ID,
+        base_model_id,
         quantization_config=bnb_config,
         device_map="auto",
         dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,
         trust_remote_code=True,
     )
     model = prepare_model_for_kbit_training(model)
+    return model, tokenizer
+
+
+def run_pipeline():
 
     # 1. PLANNER
-    # planner_ds = load_dataset("Open-Orca/OpenOrca", split="train[:5000]")
-    # planner_ds = planner_ds.filter(lambda x: x["system_prompt"] != "")
-    # planner_ds = planner_ds.select(range(min(1000, len(planner_ds))))
-    # planner_ds = planner_ds.map(format_planner_data, batched=True, remove_columns=planner_ds.column_names)
-    # train_lora(model, tokenizer, planner_ds, "planner", f"{HF_USERNAME}/planner-lora")
+    model, tokenizer = prepare_base_model(BASE_MODEL_ID)
+    planner_ds = load_dataset("Open-Orca/OpenOrca", split="train[:5000]")
+    planner_ds = planner_ds.filter(lambda x: x["system_prompt"] != "")
+    planner_ds = planner_ds.select(range(min(1000, len(planner_ds))))
+    planner_ds = planner_ds.map(
+        format_planner_data, batched=True, remove_columns=planner_ds.column_names
+    )
+    train_lora(model, tokenizer, planner_ds, "planner", f"{HF_USERNAME}/planner-lora")
+    del (model, tokenizer, planner_ds)
+    gc.collect()
+    torch.cuda.empty_cache()
 
     # 2. CODER / TOOL USER
-    # coder_ds = load_dataset("NousResearch/hermes-function-calling-v1", split="train[:1000]")
-    # coder_ds = coder_ds.map(format_coder_data, batched=True, remove_columns=coder_ds.column_names)
-    # train_lora(model, tokenizer, coder_ds, "coder", f"{HF_USERNAME}/coder-lora")
-
+    model, tokenizer = prepare_base_model(BASE_MODEL_ID)
+    coder_ds = load_dataset(
+        "NousResearch/hermes-function-calling-v1", split="train[:1000]"
+    )
+    coder_ds = coder_ds.map(
+        format_coder_data, batched=True, remove_columns=coder_ds.column_names
+    )
+    train_lora(model, tokenizer, coder_ds, "coder", f"{HF_USERNAME}/coder-lora")
+    del (model, tokenizer, coder_ds)
     gc.collect()
     torch.cuda.empty_cache()
 
     # 3. REVIEWER
+    model, tokenizer = prepare_base_model(BASE_MODEL_ID)
     reviewer_ds = load_dataset(
         "m-a-p/CodeFeedback-Filtered-Instruction", split="train[:1000]"
     )
@@ -159,8 +171,9 @@ def run_pipeline():
     train_lora(
         model, tokenizer, reviewer_ds, "reviewer", f"{HF_USERNAME}/reviewer-lora"
     )
-
-    print("\n✨ All LoRAs trained and saved successfully with TRL!")
+    del (model, tokenizer, reviewer_ds)
+    gc.collect()
+    torch.cuda.empty_cache()
 
 
 if __name__ == "__main__":

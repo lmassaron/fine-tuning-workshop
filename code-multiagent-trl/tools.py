@@ -1,9 +1,6 @@
 import os
 from pathlib import Path
 
-# --- CORE TOOLS ---
-
-
 def read_file(path: str) -> str:
     """Reads the contents of a file."""
     try:

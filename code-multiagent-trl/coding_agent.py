@@ -8,8 +8,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from peft import PeftModel
 from tools import read_file, write_file, list_files, AVAILABLE_TOOLS_SCHEMA
 
-# --- CONFIGURATION (Pure TRL / Hugging Face Stack for 16GB VRAM) ---
-# We use a single 4-bit quantized base model and dynamically hot-swap PEFT LoRA adapters.
 BASE_MODEL_ID = "unsloth/Qwen3.5-4B"
 
 # Real Hugging Face adapter paths
@@ -34,10 +32,12 @@ class LoRAManager:
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
+        self.compute_dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,
+            bnb_4bit_compute_dtype=self.compute_dtype,
             bnb_4bit_use_double_quant=True,
         )
 
@@ -45,11 +45,10 @@ class LoRAManager:
             BASE_MODEL_ID,
             quantization_config=bnb_config,
             device_map="auto",
-            dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,
+            dtype=self.compute_dtype,
             trust_remote_code=True,
         )
 
-        print("[LoRAManager] Loading PEFT LoRA adapters into memory...")
         self.model = PeftModel.from_pretrained(
             base_model,
             LORA_ADAPTERS["planner"],
@@ -60,24 +59,20 @@ class LoRAManager:
         self.model.eval()
 
         self.active_adapter = "planner"
-        print("[LoRAManager] Base model and all adapters loaded successfully. Memory footprint is stable.\n")
 
     def set_role(self, role_name: str):
         """Swaps the active LoRA adapter."""
         if role_name not in LORA_ADAPTERS and role_name != "base":
-            print(f"[LoRAManager] Role '{role_name}' unknown. Using base.")
             role_name = "base"
-
-        # GC and clear CUDA cache to minimize VRAM fragmentation
         gc.collect()
         torch.cuda.empty_cache()
 
         if role_name != "base":
             try:
                 self.model.set_adapter(role_name)
-                print(f"[LoRAManager] ⚡ Swapped -> Active Role: {role_name.upper()}")
+                print(f"[LoRAManager] Swapped -> Active Role: {role_name.upper()}")
             except Exception as e:
-                print(f"[LoRAManager] ⚠️ Failed to set adapter {role_name}: {e}")
+                print(f"[LoRAManager] Failed to set adapter {role_name}: {e}")
         else:
             try:
                 if hasattr(self.model, "disable_adapters"):
@@ -150,9 +145,7 @@ def run_agent(user_request: str):
     print(f"🚀 Goal: {user_request}\n")
     manager = LoRAManager()
 
-    # ==========================================
     # PHASE 1: PLANNING
-    # ==========================================
     manager.set_role("planner")
     plan_prompt = f"""
     You are a Senior Software Architect. Break down this request into a series of small, executable steps.
@@ -176,9 +169,7 @@ def run_agent(user_request: str):
         print(f"  - {s}")
     print()
 
-    # ==========================================
     # PHASE 2: EXECUTION LOOP
-    # ==========================================
     context = ""
 
     for step in steps:
@@ -221,25 +212,23 @@ def run_agent(user_request: str):
                 else:
                     result = f"Unknown tool: {tool_name}"
 
-                print(f"  🔧 Tool used: {tool_name} on {tool_data.get('path', '')}")
-                print(f"  ✅ Output: {result[:100]}...")
+                print(f"    Tool used: {tool_name} on {tool_data.get('path', '')}")
+                print(f"    Output: {result[:100]}...")
 
                 context += f"\nStep '{step}' completed using tool '{tool_name}'. Result: {result}\n"
                 step_success = True
                 break
 
             except json.JSONDecodeError:
-                print(f"  ⚠️ Attempt {attempt + 1}: Invalid JSON.")
+                print(f"    Attempt {attempt + 1}: Invalid JSON.")
             except Exception as e:
-                print(f"  ❌ Error executing step: {e}")
+                print(f"    Error executing step: {e}")
 
         if not step_success:
-            print("  ❌ Failed step.")
+            print("    Failed step.")
             continue
 
-        # ==========================================
         # PHASE 3: REVIEW
-        # ==========================================
         manager.set_role("reviewer")
         review_prompt = f"""
         QA Review task: "{step}"
@@ -248,9 +237,9 @@ def run_agent(user_request: str):
         """
         review = manager.generate(review_prompt, "You are a strict QA bot.")
         if "FAIL" in review.upper():
-            print(f"  🚨 Reviewer evaluation: {review.strip()[:100]}")
+            print(f"    Reviewer evaluation: {review.strip()[:100]}")
         else:
-            print("  👍 Reviewer passed the step.")
+            print("    Reviewer passed the step.")
 
     print("\n✨ Mission Complete.")
 
