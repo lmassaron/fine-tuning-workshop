@@ -8,7 +8,7 @@ from trl import SFTTrainer, SFTConfig
 
 disable_caching()
 
-BASE_MODEL_ID = "unsloth/Qwen3.5-4B"
+BASE_MODEL_ID = "Qwen/Qwen3.5-4B"
 HF_USERNAME = "lmassaron"  # Replace with your Hugging Face username
 MAX_SEQ_LENGTH = 2048
 

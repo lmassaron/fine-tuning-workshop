@@ -8,7 +8,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from peft import PeftModel
 from tools import read_file, write_file, list_files, AVAILABLE_TOOLS_SCHEMA
 
-BASE_MODEL_ID = "unsloth/Qwen3.5-4B"
+BASE_MODEL_ID = "Qwen/Qwen3.5-4B"
 
 # Real Hugging Face adapter paths
 LORA_ADAPTERS = {
