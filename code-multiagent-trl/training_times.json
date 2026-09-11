@@ -1,0 +1,17 @@
+{
+  "planner": {
+    "duration_seconds": 342.1,
+    "formatted": "5m 42s",
+    "completed_at": "2026-09-09 14:07:31"
+  },
+  "coder": {
+    "duration_seconds": 4565.41,
+    "formatted": "1h 16m 5s",
+    "completed_at": "2026-09-09 15:24:49"
+  },
+  "reviewer": {
+    "duration_seconds": 3237.99,
+    "formatted": "53m 57s",
+    "completed_at": "2026-09-09 16:20:06"
+  }
+}

@@ -156,19 +156,25 @@ def run_agent(user_request):
     for step in steps:
         print(f". Executing: {step}")
         
+        step_history = context
+        clean_outcome = ""
         max_attempts = 3
         for attempt in range(max_attempts):
-            step_success, context = execute_step(manager, step, context)    
+            step_success, step_result = execute_step(manager, step, step_history)    
             if not step_success:
                 print("    Execution failed at a system level.")
                 break
          
-            passed, critique = review_step(manager, step, context)
+            clean_outcome = step_result
+            passed, critique = review_step(manager, step, step_result)
             if passed:
-                break # Move on to the next step in the plan
+                break  # Move on to the next step in the plan
             else:
                 print(f"    [Retry {attempt + 1}/{max_attempts}] Feeding critique back to coder...")
-                context += f"\nQA Critique on previous attempt: {critique}\nPlease fix this issue.\n"
+                step_history += f"\n{step_result}\nQA Critique: {critique}\nPlease fix this issue.\n"
+                
+        if clean_outcome:
+            context += f"\n{clean_outcome}\n"
                 
     print("\n  Mission Complete.")
 
@@ -177,6 +183,7 @@ def create_plan(manager, user_request):
     manager.set_role("planner")
     plan_prompt = f"""
     Break down this request into a series of small, executable steps.
+    Ensure each step is cohesive (for example, creating a test file and writing its test cases should be a single step).
     Request: {user_request}
     Output the final plan inside a <plan>...</plan> block, with each step on a new line starting with a number.
     Keep it concise.
@@ -212,7 +219,7 @@ def execute_step(manager, step, context, max_retries=3):
         tool_prompt = f"Context:\n{context}\n\nTask: {step}\n{AVAILABLE_TOOLS_SCHEMA}"
         response = manager.generate(
             tool_prompt,
-            system_prompt="You are a strict tool-calling engine. Output JSON only.",
+            system_prompt="You are a strict tool-calling engine. To create or edit code, call the write_file tool. Output JSON only.",
         )
 
         try:
@@ -228,23 +235,23 @@ def execute_step(manager, step, context, max_retries=3):
             print(f"    Tool used: {tool_name} on {tool_data.get('path', '')}")
             print(f"    Output: {result[:100]}...")
 
-            new_context = context + f"\nStep '{step}' completed using tool '{tool_name}'. Result: {result}\n"
-            return True, new_context
+            step_result = f"Step '{step}' completed using tool '{tool_name}'. Result: {result}"
+            return True, step_result
 
         except json.JSONDecodeError:
             print(f"    Attempt {attempt + 1}: Invalid JSON.")
         except Exception as e:
             print(f"    Error executing step: {e}")
 
-    return False, context
+    return False, "Failed to execute step."
 
 
-def review_step(manager, step, context):
+def review_step(manager, step, step_result):
     """Reviews the execution result using the reviewer role."""
     manager.set_role("reviewer")
     review_prompt = f"""
     QA Review task: "{step}"
-    Output: {context}
+    Output: {step_result}
     Did the execution achieve the task properly? Reply 'PASS' or 'FAIL'.
     """
     review = manager.generate(review_prompt, "You are a strict QA bot.")
