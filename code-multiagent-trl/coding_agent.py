@@ -8,7 +8,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from peft import PeftModel
 from tools import read_file, write_file, list_files, AVAILABLE_TOOLS_SCHEMA
 
-BASE_MODEL_ID = "Qwen/Qwen3.5-4B"
+MODEL_ID = "Qwen/Qwen3.5-4B"
 
 # Real Hugging Face adapter paths
 LORA_ADAPTERS = {
@@ -17,12 +17,13 @@ LORA_ADAPTERS = {
     "reviewer": "lmassaron/reviewer-lora",
 }
 
-def prepare_base_model(base_model_id: str):
+def prepare_base_model(model_id):
     """Loads tokenizer and 4-bit quantized base model."""
-    print(f"[LoRAManager] Loading base model: {base_model_id} (4-bit NF4)...")
-    tokenizer = AutoTokenizer.from_pretrained(base_model_id, trust_remote_code=True)
+    print(f"[LoRAManager] Loading base model: {model_id} (4-bit NF4)...")
+    tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.eos_token = "<|im_end|>"
 
     compute_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
     bnb_config = BitsAndBytesConfig(
@@ -33,7 +34,7 @@ def prepare_base_model(base_model_id: str):
     )
 
     base_model = AutoModelForCausalLM.from_pretrained(
-        base_model_id,
+        model_id,
         quantization_config=bnb_config,
         device_map="auto",
         dtype=compute_dtype,
@@ -42,7 +43,7 @@ def prepare_base_model(base_model_id: str):
     return base_model, tokenizer
 
 
-def load_adapters(base_model, adapters: dict):
+def load_adapters(base_model, adapters):
     """Loads and attaches PEFT LoRA adapters to the base model."""
     model = PeftModel.from_pretrained(
         base_model, adapters["planner"], adapter_name="planner"
@@ -56,12 +57,12 @@ def load_adapters(base_model, adapters: dict):
 class LoRAManager:
     """Dynamically swaps LoRA adapters on a single base model using pure Hugging Face PEFT."""
 
-    def __init__(self):
-        base_model, self.tokenizer = prepare_base_model(BASE_MODEL_ID)
+    def __init__(self, model_id):
+        base_model, self.tokenizer = prepare_base_model(model_id)
         self.model = load_adapters(base_model, LORA_ADAPTERS)
         self.active_adapter = "planner"
 
-    def set_role(self, role_name: str):
+    def set_role(self, role_name):
         """Swaps the active LoRA adapter."""
         if role_name not in LORA_ADAPTERS and role_name != "base":
             role_name = "base"
@@ -80,11 +81,11 @@ class LoRAManager:
                     self.model.disable_adapters()
             except Exception:
                 pass
-            print("[LoRAManager] ⚡ Swapped -> Active Role: BASE")
+            print("[LoRAManager] Swapped -> Active Role: BASE")
 
         self.active_adapter = role_name
 
-    def generate(self, prompt: str, system_prompt: str = "") -> str:
+    def generate(self, prompt, system_prompt="") -> str:
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -99,7 +100,7 @@ class LoRAManager:
         with torch.no_grad():
             outputs = self.model.generate(
                 **inputs,
-                max_new_tokens=1024,
+                max_new_tokens=2048,
                 temperature=0.1,
                 do_sample=True,
                 pad_token_id=self.tokenizer.eos_token_id,
@@ -111,7 +112,7 @@ class LoRAManager:
         return response
 
 
-def extract_plan_steps(plan_text: str) -> list[str]:
+def extract_plan_steps(plan_text):
     """Extracts clean, numbered plan steps from model output."""
     matches = re.findall(r"<plan>(.*?)</plan>", plan_text, re.DOTALL)
     if matches:
@@ -141,15 +142,44 @@ def extract_plan_steps(plan_text: str) -> list[str]:
 
     return steps
 
+def run_agent(user_request):
+    print(f". Goal: {user_request}\n")
+    manager = LoRAManager(MODEL_ID)
+    steps = create_plan(manager, user_request)
+    
+    print(". Parsed Steps for Execution:")
+    for s in steps:
+        print(f"  - {s}")
+    print()
+    
+    context = ""
+    for step in steps:
+        print(f". Executing: {step}")
+        
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            step_success, context = execute_step(manager, step, context)    
+            if not step_success:
+                print("    Execution failed at a system level.")
+                break
+         
+            passed, critique = review_step(manager, step, context)
+            if passed:
+                break # Move on to the next step in the plan
+            else:
+                print(f"    [Retry {attempt + 1}/{max_attempts}] Feeding critique back to coder...")
+                context += f"\nQA Critique on previous attempt: {critique}\nPlease fix this issue.\n"
+                
+    print("\n  Mission Complete.")
 
-def create_plan(manager: LoRAManager, user_request: str) -> list[str]:
+def create_plan(manager, user_request):
     """Generates and extracts execution steps using the planner role."""
     manager.set_role("planner")
     plan_prompt = f"""
-    You are a Senior Software Architect. Break down this request into a series of small, executable steps.
+    Break down this request into a series of small, executable steps.
     Request: {user_request}
-    
-    Output the final plan inside a <plan>...</plan> block, with each step on a new line starting with a number. Keep it concise.
+    Output the final plan inside a <plan>...</plan> block, with each step on a new line starting with a number.
+    Keep it concise.
     """
     plan = manager.generate(
         plan_prompt,
@@ -164,7 +194,7 @@ def create_plan(manager: LoRAManager, user_request: str) -> list[str]:
     return steps
 
 
-def execute_tool(tool_name: str, tool_data: dict) -> str:
+def execute_tool(tool_name, tool_data):
     """Dispatches tool execution to the appropriate tool function."""
     if tool_name == "write_file":
         return write_file(tool_data.get("path", ""), tool_data.get("content", ""))
@@ -175,7 +205,7 @@ def execute_tool(tool_name: str, tool_data: dict) -> str:
     return f"Unknown tool: {tool_name}"
 
 
-def execute_step(manager: LoRAManager, step: str, context: str, max_retries: int = 3):
+def execute_step(manager, step, context, max_retries=3):
     """Executes a single step with coder role, retrying on JSON decode errors."""
     manager.set_role("coder")
     for attempt in range(max_retries):
@@ -209,7 +239,7 @@ def execute_step(manager: LoRAManager, step: str, context: str, max_retries: int
     return False, context
 
 
-def review_step(manager: LoRAManager, step: str, context: str):
+def review_step(manager, step, context):
     """Reviews the execution result using the reviewer role."""
     manager.set_role("reviewer")
     review_prompt = f"""
@@ -220,31 +250,10 @@ def review_step(manager: LoRAManager, step: str, context: str):
     review = manager.generate(review_prompt, "You are a strict QA bot.")
     if "FAIL" in review.upper():
         print(f"    Reviewer evaluation: {review.strip()[:100]}")
+        return False, review
     else:
         print("    Reviewer passed the step.")
-
-
-def run_agent(user_request: str):
-    print(f". Goal: {user_request}\n")
-    manager = LoRAManager()
-
-    steps = create_plan(manager, user_request)
-    print(". Parsed Steps for Execution:")
-    for s in steps:
-        print(f"  - {s}")
-    print()
-
-    context = ""
-    for step in steps:
-        print(f". Executing: {step}")
-        step_success, context = execute_step(manager, step, context)
-        if not step_success:
-            print("    Failed step.")
-            continue
-
-        review_step(manager, step, context)
-
-    print("\n✨ Mission Complete.")
+        return True, "PASS"
 
 
 if __name__ == "__main__":
@@ -261,10 +270,10 @@ if __name__ == "__main__":
     if not args.instruction:
         # Fallback default task if none provided
         args.instruction = (
-            "Write a Python function to solve the 'Longest Substring Without Repeating Characters' problem.\n"
-            "Given a string s, find the length of the longest substring without repeating characters.\n"
-            "Save the solution in 'longest_substring.py' and write a unit test file named 'tests/test_longest_substring.py' checking edge cases."
+            "Write a Python function to solve the classic 'FizzBuzz' problem.\n" 
+            "The function should process numbers from 1 to 100, replacing multiples of 3 with 'Fizz', multiples of 5 with 'Buzz', and multiples of both with 'FizzBuzz'.\n" 
+            "Save the solution in 'fizzbuzz.py' and write a unit test file named 'tests/test_fizzbuzz.py' checking standard edge cases."
         )
-        print("No instruction argument provided. Running default LeetCode task...")
+        print("No instruction argument provided. Running default FizzBuzz task...")
 
     run_agent(args.instruction)

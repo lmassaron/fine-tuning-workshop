@@ -8,42 +8,41 @@ from trl import SFTTrainer, SFTConfig
 
 disable_caching()
 
-BASE_MODEL_ID = "Qwen/Qwen3.5-4B"
+MODEL_ID = "Qwen/Qwen3.5-4B"
 HF_USERNAME = "lmassaron"  # Replace with your Hugging Face username
 MAX_SEQ_LENGTH = 2048
 
 
-# Standard chat template wrapper
-def create_prompt(instruction, output):
-    return f"<|im_start|>system\nYou are a specialized AI agent.<|im_end|>\n<|im_start|>user\n{instruction}\n<|im_end|>\n<|im_start|>assistant\n{output}<|im_end|>"
-
+def create_prompt(instruction, role, output):
+    return f"<|im_start|>system\n{role}<|im_end|>\n<|im_start|>user\n{instruction}\n<|im_end|>\n<|im_start|>assistant\n{output}<|im_end|>"
 
 def format_planner_data(examples):
+    role = "You are a Senior Software Architect."
     texts = []
     for q, r in zip(examples["question"], examples["response"]):
         if "step" in q.lower() or "plan" in q.lower():
-            texts.append(create_prompt(q, r))
+            texts.append(create_prompt(q, role, r))
     return {"text": texts}
 
-
 def format_coder_data(examples):
+    role = "You are a strict tool-calling engine."
     texts = []
     for conversations in examples.get("conversations", []):
         try:
             instruction = conversations[0]["value"]
             output = conversations[1]["value"]
-            texts.append(create_prompt(instruction, output))
+            texts.append(create_prompt(instruction, role, output))
         except Exception:
             continue
     return {"text": texts}
 
-
 def format_reviewer_data(examples):
+    role = "You are a strict QA bot."
     texts = []
     for code, review in zip(examples.get("query", []), examples.get("answer", [])):
         instruction = f"Review this code snippet:\n{code}"
         output = f"Review Analysis:\n{review}"
-        texts.append(create_prompt(instruction, output))
+        texts.append(create_prompt(instruction, role, output))
     return {"text": texts}
 
 
@@ -71,9 +70,9 @@ def train_lora(model, tokenizer, dataset, output_name, push_repo_name):
             dataset_text_field="text",
             max_length=MAX_SEQ_LENGTH,
             eos_token="<|im_end|>",
-            # Training Duration: 1 epoch capped under 4h total
-            num_train_epochs=1,
-            # Batching & Throughput (Safe for 16GB VRAM)
+            # Training Duration
+            num_train_epochs=2,
+            # Batching & Throughput
             per_device_train_batch_size=2,
             gradient_accumulation_steps=8,  # Effective batch size = 16
             gradient_checkpointing=True,
@@ -81,7 +80,6 @@ def train_lora(model, tokenizer, dataset, output_name, push_repo_name):
             # Learning Rate & Schedule
             learning_rate=1e-4,
             lr_scheduler_type="cosine",
-            warmup_ratio=0.04,
             weight_decay=0.01,
             # Optimizer & Precision
             optim="paged_adamw_8bit",
@@ -90,7 +88,7 @@ def train_lora(model, tokenizer, dataset, output_name, push_repo_name):
             # Checkpointing & Logging
             logging_steps=10,
             save_strategy="steps",
-            save_steps=50,
+            save_steps=200,
             save_total_limit=2,
             output_dir=f"outputs_{output_name}",
         ),
@@ -112,11 +110,11 @@ def train_lora(model, tokenizer, dataset, output_name, push_repo_name):
         print(f"Skipping Hugging Face push due to error: {e}")
 
 
-def prepare_base_model(base_model_id):
+def prepare_base_model(model_id):
     print("Initializing base model and tokenizer...")
 
     tokenizer = AutoTokenizer.from_pretrained(
-        base_model_id,
+        model_id,
         trust_remote_code=True,
     )
     if tokenizer.pad_token is None:
@@ -133,7 +131,7 @@ def prepare_base_model(base_model_id):
     )
 
     model = AutoModelForCausalLM.from_pretrained(
-        base_model_id,
+        model_id,
         quantization_config=bnb_config,
         device_map="auto",
         dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,
@@ -146,7 +144,7 @@ def prepare_base_model(base_model_id):
 def run_pipeline():
 
     # 1. PLANNER
-    model, tokenizer = prepare_base_model(BASE_MODEL_ID)
+    model, tokenizer = prepare_base_model(MODEL_ID)
     planner_ds = load_dataset("Open-Orca/OpenOrca", split="train[:5000]")
     planner_ds = planner_ds.filter(lambda x: x["system_prompt"] != "")
     planner_ds = planner_ds.select(range(min(1000, len(planner_ds))))
@@ -158,10 +156,10 @@ def run_pipeline():
     gc.collect()
     torch.cuda.empty_cache()
 
-    # 2. CODER / TOOL USER (1 epoch, ~1200 samples, ~1.5h)
-    model, tokenizer = prepare_base_model(BASE_MODEL_ID)
+    # 2. CODER / TOOL USER
+    model, tokenizer = prepare_base_model(MODEL_ID)
     coder_ds = load_dataset(
-        "NousResearch/hermes-function-calling-v1", split="train[:1200]"
+        "NousResearch/hermes-function-calling-v1", split="train[:5000]"
     )
     coder_ds = coder_ds.map(
         format_coder_data, batched=True, remove_columns=coder_ds.column_names
@@ -171,14 +169,15 @@ def run_pipeline():
     gc.collect()
     torch.cuda.empty_cache()
 
-    # 3. REVIEWER (1 epoch, ~1200 samples, ~1.5h)
-    model, tokenizer = prepare_base_model(BASE_MODEL_ID)
+    # 3. REVIEWER
+    model, tokenizer = prepare_base_model(MODEL_ID)
     reviewer_ds = load_dataset(
-        "m-a-p/CodeFeedback-Filtered-Instruction", split="train[:1200]"
+        "m-a-p/CodeFeedback-Filtered-Instruction", split="train[:5000]"
     )
     reviewer_ds = reviewer_ds.map(
         format_reviewer_data, batched=True, remove_columns=reviewer_ds.column_names
     )
+
     train_lora(
         model, tokenizer, reviewer_ds, "reviewer", f"{HF_USERNAME}/reviewer-lora"
     )
