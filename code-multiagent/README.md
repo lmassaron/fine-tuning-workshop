@@ -1,6 +1,6 @@
 # Local Coding Multi-Agent CLI
 
-This repository implements a local, privacy-first **Coding Multi-Agent system** utilizing dynamic PEFT LoRA adapter swapping on a single base model (`unsloth/Qwen3.5-4B`). It operates under a flat consumer-hardware GPU budget of 16GB VRAM.
+This repository implements a local, privacy-first **Coding Multi-Agent system** utilizing dynamic PEFT LoRA adapter swapping on a single base model (`Qwen/Qwen3-4B`). It operates under a flat consumer-hardware GPU budget of 16GB VRAM.
 
 ## Setup Instructions
 

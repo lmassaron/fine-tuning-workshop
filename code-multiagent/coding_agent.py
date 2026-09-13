@@ -8,7 +8,7 @@ from tools import read_file, write_file, list_files, AVAILABLE_TOOLS_SCHEMA
 
 # --- CONFIGURATION (2026 HF Stack for 16GB VRAM) ---
 # We use a single powerful base model to save VRAM, and swap LoRA adapters on the fly.
-BASE_MODEL_ID = "unsloth/Qwen3.5-4B"
+BASE_MODEL_ID = "Qwen/Qwen3-4B"
 
 # Real Hugging Face adapter paths
 LORA_ADAPTERS = {
@@ -53,22 +53,22 @@ class LoRAManager:
                 )
             except ValueError as e:
                 if "already exists" not in str(e):
-                    print(f"[LoRAManager] ⚠️ ValueError loading {role_name}: {e}")
+                    print(f"[LoRAManager] ValueError loading {role_name}: {e}")
             except Exception as e:
-                print(f"[LoRAManager] ⚠️ Failed to load adapter {role_name}: {e}")
+                print(f"[LoRAManager] Failed to load adapter {role_name}: {e}")
 
             try:
                 self.model.set_adapter(role_name)
-                print(f"[LoRAManager] ⚡ Swapped -> Active Role: {role_name.upper()}")
+                print(f"[LoRAManager] Swapped -> Active Role: {role_name.upper()}")
             except Exception as e:
-                print(f"[LoRAManager] ⚠️ Failed to set adapter {role_name}: {e}")
+                print(f"[LoRAManager] Failed to set adapter {role_name}: {e}")
         else:
             try:
                 if hasattr(self.model, "disable_adapters"):
                     self.model.disable_adapters()
             except Exception:
                 pass
-            print("[LoRAManager] ⚡ Swapped -> Active Role: BASE")
+            print("[LoRAManager] Swapped -> Active Role: BASE")
 
         self.active_adapter = role_name
 
@@ -99,7 +99,7 @@ class LoRAManager:
 
 
 def run_agent(user_request: str):
-    print(f"🚀 Goal: {user_request}\n")
+    print(f". Goal: {user_request}\n")
     manager = LoRAManager()
 
     # ==========================================
@@ -113,7 +113,7 @@ def run_agent(user_request: str):
     Output the final plan inside a <plan>...</plan> block, with each step on a new line starting with a number. Keep it concise.
     """
     plan = manager.generate(plan_prompt)
-    print(f"📋 Plan:\n{plan}\n")
+    print(f"Plan:\n{plan}\n")
 
     plan_match = re.search(r"<plan>(.*?)</plan>", plan, re.DOTALL)
     if plan_match:
@@ -129,7 +129,7 @@ def run_agent(user_request: str):
 
     if not steps:
         print(
-            "⚠️ Warning: No numbered steps found in plan. Attempting fallback split..."
+            "Warning: No numbered steps found in plan. Attempting fallback split..."
         )
         steps = [
             line
@@ -143,15 +143,19 @@ def run_agent(user_request: str):
     context = ""
 
     for step in steps:
-        print(f"⚙️ Executing: {step}")
+        print(f". Executing: {step}")
         max_retries = 3
         step_success = False
+        error_feedback = ""
 
         for attempt in range(max_retries):
             # 2a: Generate Tool Call
             manager.set_role("coder")
             tool_prompt = (
-                f"Context:\n{context}\n\nTask: {step}\n{AVAILABLE_TOOLS_SCHEMA}"
+                f"Context:\n{context}\n\n"
+                f"Task: {step}\n"
+                f"{error_feedback}"
+                f"{AVAILABLE_TOOLS_SCHEMA}"
             )
 
             response = manager.generate(
@@ -161,41 +165,51 @@ def run_agent(user_request: str):
 
             # Extract JSON
             try:
-                json_match = re.search(r"\{.*\}", response, re.DOTALL)
+                clean_resp = re.sub(r"<think>.*?</think>", "", response, flags=re.DOTALL)
+                json_match = re.search(r"\{.*\}", clean_resp, re.DOTALL) or re.search(r"\{.*\}", response, re.DOTALL)
                 if not json_match:
-                    print(f"  ⚠️ Attempt {attempt + 1}: Failed to find JSON.")
+                    print(f"  Attempt {attempt + 1}: Failed to find JSON.")
+                    error_feedback = "Feedback: Your previous output did not contain valid JSON. Please output only a valid JSON tool call conforming to the schema.\n\n"
                     continue
 
                 tool_data = json.loads(json_match.group(0))
-                tool_name = tool_data.get("tool")
+                tool_name = tool_data.get("tool") or tool_data.get("name")
+                args = tool_data.get("arguments", tool_data) if isinstance(tool_data.get("arguments"), dict) else tool_data
 
                 # EXECUTE
                 result = ""
                 if tool_name == "write_file":
                     result = write_file(
-                        tool_data.get("path", ""), tool_data.get("content", "")
+                        args.get("path", ""), args.get("content", "")
                     )
                 elif tool_name == "read_file":
-                    result = read_file(tool_data.get("path", ""))
+                    result = read_file(args.get("path", ""))
                 elif tool_name == "list_files":
-                    result = list_files(tool_data.get("path", "."))
+                    result = list_files(args.get("path", "."))
                 else:
                     result = f"Unknown tool: {tool_name}"
 
-                print(f"  🔧 Tool used: {tool_name} on {tool_data.get('path', '')}")
-                print(f"  ✅ Output: {result[:100]}...")
+                if not tool_name or result.startswith("Unknown tool"):
+                    print(f"  Attempt {attempt + 1}: Unrecognized tool call ({tool_name}).")
+                    error_feedback = f"Feedback: Unrecognized tool '{tool_name}'. You must call write_file, read_file, or list_files.\n\n"
+                    continue
+
+                print(f"  Tool used: {tool_name} on {args.get('path', '')}")
+                print(f"  Output: {result[:100]}...")
 
                 context += f"\nStep '{step}' completed using tool '{tool_name}'. Result: {result}\n"
                 step_success = True
                 break
 
-            except json.JSONDecodeError:
-                print(f"  ⚠️ Attempt {attempt + 1}: Invalid JSON.")
+            except json.JSONDecodeError as e:
+                print(f"  Attempt {attempt + 1}: Invalid JSON ({e}).")
+                error_feedback = f"Feedback: Your previous JSON output was malformed ({e}). Please fix any syntax errors and output valid JSON only.\n\n"
             except Exception as e:
-                print(f"  ❌ Error executing step: {e}")
+                print(f"  Error executing step: {e}")
+                error_feedback = f"Feedback: Tool execution failed with error: {e}. Please correct the tool call.\n\n"
 
         if not step_success:
-            print("  ❌ Failed step.")
+            print("  Failed step.")
             continue
 
         # ==========================================
@@ -207,13 +221,13 @@ def run_agent(user_request: str):
         Output: {context}
         Did the execution achieve the task properly? Reply 'PASS' or 'FAIL'.
         """
-        review = manager.generate(review_prompt, "You are a strict QA bot.")
+        review = manager.generate(review_prompt, system_prompt="You are a strict QA bot.")
         if "FAIL" in review.upper():
-            print("  🚨 Reviewer flagged the step as FAILED.")
+            print("  Reviewer flagged the step as FAILED.")
         else:
-            print("  👍 Reviewer passed the step.")
+            print("  Reviewer passed the step.")
 
-    print("\n✨ Mission Complete.")
+    print("\n  Mission Complete.")
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ Instead of loading three separate heavy models, we load a single, quantized base
 Running multiple distinct agents (Planner, Coder, Reviewer) locally normally requires massive GPU resources. Loading three different 9B models simultaneously would consume 30GB+ of VRAM, leading to instant Out-of-Memory (OOM) errors on consumer cards.
 
 To solve this under a strict 16GB budget, we use **Dynamic LoRA Hot-Swapping**:
-1. We load a single base model (`unsloth/Qwen3.5-4B` or `Qwen/Qwen3.5-9B`) in 4-bit quantization, which takes only ~3.5GB to ~5.5GB of VRAM.
+1. We load a single base model (`Qwen/Qwen3-4B`) in 4-bit quantization, which takes only ~3.5GB to ~5.5GB of VRAM.
 2. We load the model context for inference using PEFT (Parameter-Efficient Fine-Tuning).
 3. As the execution phase transitions (e.g., Planner -> Coder -> Reviewer), we call `model.set_adapter()`. The PEFT library hot-swaps the active LoRA weights in milliseconds.
 4. Since LoRA weights are tiny (usually 10MB to 50MB per role), the VRAM footprint remains completely flat throughout execution.

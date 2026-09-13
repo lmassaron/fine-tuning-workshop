@@ -1,7 +1,7 @@
 {
   "system_constraints": {
     "model": {
-      "base_model": "unsloth/Qwen3.5-4B",
+      "base_model": "Qwen/Qwen3-4B",
       "quantization": "4-bit",
       "max_seq_length": 2048,
       "device": "cuda"

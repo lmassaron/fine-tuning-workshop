@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import json
 import re
 import torch
@@ -8,14 +7,14 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from peft import PeftModel
 from tools import read_file, write_file, list_files, AVAILABLE_TOOLS_SCHEMA
 
-MODEL_ID = "Qwen/Qwen3.5-4B"
+MODEL_ID = "Qwen/Qwen3-4B"
 
-# Real Hugging Face adapter paths
 LORA_ADAPTERS = {
     "planner": "lmassaron/planner-lora",
     "coder": "lmassaron/coder-lora",
     "reviewer": "lmassaron/reviewer-lora",
 }
+
 
 def prepare_base_model(model_id):
     """Loads tokenizer and 4-bit quantized base model."""
@@ -142,6 +141,7 @@ def extract_plan_steps(plan_text):
 
     return steps
 
+
 def run_agent(user_request):
     print(f". Goal: {user_request}\n")
     manager = LoRAManager(MODEL_ID)
@@ -178,6 +178,7 @@ def run_agent(user_request):
                 
     print("\n  Mission Complete.")
 
+
 def create_plan(manager, user_request):
     """Generates and extracts execution steps using the planner role."""
     manager.set_role("planner")
@@ -203,45 +204,62 @@ def create_plan(manager, user_request):
 
 def execute_tool(tool_name, tool_data):
     """Dispatches tool execution to the appropriate tool function."""
+    args = tool_data.get("arguments", tool_data) if isinstance(tool_data.get("arguments"), dict) else tool_data
     if tool_name == "write_file":
-        return write_file(tool_data.get("path", ""), tool_data.get("content", ""))
+        return write_file(args.get("path", ""), args.get("content", ""))
     elif tool_name == "read_file":
-        return read_file(tool_data.get("path", ""))
+        return read_file(args.get("path", ""))
     elif tool_name == "list_files":
-        return list_files(tool_data.get("path", "."))
+        return list_files(args.get("path", "."))
     return f"Unknown tool: {tool_name}"
 
 
 def execute_step(manager, step, context, max_retries=3):
-    """Executes a single step with coder role, retrying on JSON decode errors."""
+    """Executes a single step with coder role, retrying on JSON decode errors with error feedback."""
     manager.set_role("coder")
+    error_feedback = ""
     for attempt in range(max_retries):
-        tool_prompt = f"Context:\n{context}\n\nTask: {step}\n{AVAILABLE_TOOLS_SCHEMA}"
+        tool_prompt = (
+            f"Context:\n{context}\n\n"
+            f"Task: {step}\n"
+            f"{error_feedback}"
+            f"{AVAILABLE_TOOLS_SCHEMA}"
+        )
         response = manager.generate(
             tool_prompt,
             system_prompt="You are a strict tool-calling engine. To create or edit code, call the write_file tool. Output JSON only.",
         )
 
         try:
-            json_match = re.search(r"\{.*\}", response, re.DOTALL)
+            clean_resp = re.sub(r"<think>.*?</think>", "", response, flags=re.DOTALL)
+            json_match = re.search(r"\{.*\}", clean_resp, re.DOTALL) or re.search(r"\{.*\}", response, re.DOTALL)
             if not json_match:
                 print(f"    Attempt {attempt + 1}: Failed to find JSON.")
+                error_feedback = "Feedback: Your previous output did not contain valid JSON. Please output only a valid JSON tool call conforming to the schema.\n\n"
                 continue
 
             tool_data = json.loads(json_match.group(0))
-            tool_name = tool_data.get("tool")
+            tool_name = tool_data.get("tool") or tool_data.get("name")
             result = execute_tool(tool_name, tool_data)
+            args = tool_data.get("arguments", tool_data) if isinstance(tool_data.get("arguments"), dict) else tool_data
 
-            print(f"    Tool used: {tool_name} on {tool_data.get('path', '')}")
+            if not tool_name or result.startswith("Unknown tool"):
+                print(f"    Attempt {attempt + 1}: Unrecognized tool call ({tool_name}).")
+                error_feedback = f"Feedback: Unrecognized tool '{tool_name}'. You must call write_file, read_file, or list_files.\n\n"
+                continue
+
+            print(f"    Tool used: {tool_name} on {args.get('path', '')}")
             print(f"    Output: {result[:100]}...")
 
             step_result = f"Step '{step}' completed using tool '{tool_name}'. Result: {result}"
             return True, step_result
 
-        except json.JSONDecodeError:
-            print(f"    Attempt {attempt + 1}: Invalid JSON.")
+        except json.JSONDecodeError as e:
+            print(f"    Attempt {attempt + 1}: Invalid JSON ({e}).")
+            error_feedback = f"Feedback: Your previous JSON output was malformed ({e}). Please fix any syntax errors and output valid JSON only.\n\n"
         except Exception as e:
             print(f"    Error executing step: {e}")
+            error_feedback = f"Feedback: Tool execution failed with error: {e}. Please correct the tool call.\n\n"
 
     return False, "Failed to execute step."
 

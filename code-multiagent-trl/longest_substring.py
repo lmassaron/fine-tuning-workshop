@@ -1,40 +1,16 @@
-def longest_substring_without_repeating_chars(s):
-    """
-    Find the length of the longest substring without repeating characters.
-    
-    Args:
-        s (str): The input string to analyze.
-    
-    Returns:
-        int: The length of the longest substring without repeating characters.
-    """
-    if not s:
-        return 0
-    
+def length_of_longest_substring(s):
     char_set = set()
-    max_length = 0
-    start = 0
-    
-    for end in range(len(s)):
-        while s[end] in char_set:
-            char_set.remove(s[start])
-            start += 1
-        char_set.add(s[end])
-        max_length = max(max_length, end - start + 1)
-    
-    return max_length
+    left = 0
+    max_len = 0
 
+    for right in range(len(s)):
+        while s[right] in char_set:
+            char_set.remove(s[left])
+            left += 1
+        char_set.add(s[right])
+        max_len = max(max_len, right - left + 1)
+    return max_len
 
-if __name__ == "__main__":
-    # Test cases
-    test_cases = [
-        "abcabcbb",
-        "bbbbb",
-        "pwwkew",
-        "",
-        "abcdef"
-    ]
-    
-    for test in test_cases:
-        result = longest_substring_without_repeating_chars(test)
-        print(f"Input: '{test}' -> Length: {result}")
+# Example usage:
+# s = "abcabcbb"
+# print(length_of_longest_substring(s))  # Output: 3

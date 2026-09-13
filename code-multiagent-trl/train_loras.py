@@ -8,7 +8,10 @@ from trl import SFTTrainer, SFTConfig
 
 disable_caching()
 
-MODEL_ID = "Qwen/Qwen3.5-4B"
+import time
+from datetime import datetime
+
+MODEL_ID = "Qwen/Qwen3-4B"
 HF_USERNAME = "lmassaron"  # Replace with your Hugging Face username
 MAX_SEQ_LENGTH = 2048
 
@@ -27,11 +30,19 @@ def format_planner_data(examples):
 def format_coder_data(examples):
     role = "You are a strict tool-calling engine."
     texts = []
-    for conversations in examples.get("conversations", []):
+    for convs in examples.get("conversations", []):
         try:
-            instruction = conversations[0]["value"]
-            output = conversations[1]["value"]
-            texts.append(create_prompt(instruction, role, output))
+            human_val = None
+            gpt_val = None
+            for turn in convs:
+                r = turn.get("from") or turn.get("role")
+                if r == "human" and human_val is None:
+                    human_val = turn.get("value") or turn.get("content")
+                elif r == "gpt" and gpt_val is None:
+                    gpt_val = turn.get("value") or turn.get("content")
+
+            if human_val and gpt_val:
+                texts.append(create_prompt(human_val, role, gpt_val))
         except Exception:
             continue
     return {"text": texts}
@@ -46,7 +57,31 @@ def format_reviewer_data(examples):
     return {"text": texts}
 
 
-def train_lora(model, tokenizer, dataset, output_name, push_repo_name):
+import json
+
+
+def update_training_times(role, duration_seconds, completed_at):
+    times_file = "training_times.json"
+    data = {}
+    if os.path.exists(times_file):
+        try:
+            with open(times_file, "r") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+    mins, secs = divmod(int(duration_seconds), 60)
+    hours, mins = divmod(mins, 60)
+    formatted = f"{hours}h {mins}m {secs}s" if hours > 0 else f"{mins}m {secs}s"
+    data[role] = {
+        "duration_seconds": round(duration_seconds, 2),
+        "formatted": formatted,
+        "completed_at": completed_at,
+    }
+    with open(times_file, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def train_lora(model, tokenizer, dataset, output_name, push_repo_name, resume_from_checkpoint=None):
     print(f"\n--- Training {output_name} with TRL SFTTrainer ---")
 
     peft_config = LoraConfig(
@@ -94,7 +129,18 @@ def train_lora(model, tokenizer, dataset, output_name, push_repo_name):
         ),
     )
 
-    trainer.train()
+    start_time = time.time()
+    start_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"\n[TIMING] Starting {output_name} training at {start_str}...")
+    if resume_from_checkpoint:
+        print(f"[TIMING] Resuming from checkpoint: {resume_from_checkpoint}")
+
+    trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+
+    duration = time.time() - start_time
+    end_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    update_training_times(output_name, duration, end_str)
+    print(f"\n[TIMING] >>> {output_name} training took {duration:.1f}s <<<")
 
     local_path = f"adapters/{output_name}-lora"
     print(
@@ -144,30 +190,36 @@ def prepare_base_model(model_id):
 def run_pipeline():
 
     # 1. PLANNER
-    model, tokenizer = prepare_base_model(MODEL_ID)
-    planner_ds = load_dataset("Open-Orca/OpenOrca", split="train[:5000]")
-    planner_ds = planner_ds.filter(lambda x: x["system_prompt"] != "")
-    planner_ds = planner_ds.select(range(min(1000, len(planner_ds))))
-    planner_ds = planner_ds.map(
-        format_planner_data, batched=True, remove_columns=planner_ds.column_names
-    )
-    train_lora(model, tokenizer, planner_ds, "planner", f"{HF_USERNAME}/planner-lora")
-    del (model, tokenizer, planner_ds)
-    gc.collect()
-    torch.cuda.empty_cache()
+    if os.path.exists("adapters/planner-lora/adapter_model.safetensors"):
+        print("\n[PLANNER] Found existing trained Qwen3-4B adapter at adapters/planner-lora. Skipping retraining.")
+    else:
+        model, tokenizer = prepare_base_model(MODEL_ID)
+        planner_ds = load_dataset("Open-Orca/OpenOrca", split="train[:5000]")
+        planner_ds = planner_ds.filter(lambda x: x["system_prompt"] != "")
+        planner_ds = planner_ds.select(range(min(1000, len(planner_ds))))
+        planner_ds = planner_ds.map(
+            format_planner_data, batched=True, remove_columns=planner_ds.column_names
+        )
+        train_lora(model, tokenizer, planner_ds, "planner", f"{HF_USERNAME}/planner-lora")
+        del (model, tokenizer, planner_ds)
+        gc.collect()
+        torch.cuda.empty_cache()
 
     # 2. CODER / TOOL USER
-    model, tokenizer = prepare_base_model(MODEL_ID)
-    coder_ds = load_dataset(
-        "NousResearch/hermes-function-calling-v1", split="train[:5000]"
-    )
-    coder_ds = coder_ds.map(
-        format_coder_data, batched=True, remove_columns=coder_ds.column_names
-    )
-    train_lora(model, tokenizer, coder_ds, "coder", f"{HF_USERNAME}/coder-lora")
-    del (model, tokenizer, coder_ds)
-    gc.collect()
-    torch.cuda.empty_cache()
+    if os.path.exists("adapters/coder-lora/adapter_model.safetensors"):
+        print("\n[CODER] Found existing trained Qwen3-4B adapter at adapters/coder-lora. Skipping retraining.")
+    else:
+        model, tokenizer = prepare_base_model(MODEL_ID)
+        coder_ds = load_dataset(
+            "NousResearch/hermes-function-calling-v1", split="train[:5000]"
+        )
+        coder_ds = coder_ds.map(
+            format_coder_data, batched=True, remove_columns=coder_ds.column_names
+        )
+        train_lora(model, tokenizer, coder_ds, "coder", f"{HF_USERNAME}/coder-lora")
+        del (model, tokenizer, coder_ds)
+        gc.collect()
+        torch.cuda.empty_cache()
 
     # 3. REVIEWER
     model, tokenizer = prepare_base_model(MODEL_ID)
@@ -178,8 +230,12 @@ def run_pipeline():
         format_reviewer_data, batched=True, remove_columns=reviewer_ds.column_names
     )
 
+    resume_ckpt = None
+    if os.path.exists("outputs_reviewer/checkpoint-200"):
+        resume_ckpt = "outputs_reviewer/checkpoint-200"
+
     train_lora(
-        model, tokenizer, reviewer_ds, "reviewer", f"{HF_USERNAME}/reviewer-lora"
+        model, tokenizer, reviewer_ds, "reviewer", f"{HF_USERNAME}/reviewer-lora", resume_from_checkpoint=resume_ckpt
     )
     del (model, tokenizer, reviewer_ds)
     gc.collect()

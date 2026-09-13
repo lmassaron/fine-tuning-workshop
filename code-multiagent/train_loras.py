@@ -12,7 +12,7 @@ from unsloth import FastLanguageModel
 disable_caching()
 
 # --- CONFIGURATION ---
-BASE_MODEL_ID = "unsloth/Qwen3.5-4B"
+BASE_MODEL_ID = "Qwen/Qwen3-4B"
 HF_USERNAME = "lmassaron"  # Replace with your Hugging Face username
 
 MAX_SEQ_LENGTH = 2048
@@ -36,11 +36,19 @@ def format_planner_data(examples):
 
 def format_coder_data(examples):
     texts = []
-    for conversations in examples.get("conversations", []):
+    for convs in examples.get("conversations", []):
         try:
-            instruction = conversations[0]["value"]
-            output = conversations[1]["value"]
-            texts.append(create_prompt(instruction, output))
+            human_val = None
+            gpt_val = None
+            for turn in convs:
+                r = turn.get("from") or turn.get("role")
+                if r == "human" and human_val is None:
+                    human_val = turn.get("value") or turn.get("content")
+                elif r == "gpt" and gpt_val is None:
+                    gpt_val = turn.get("value") or turn.get("content")
+
+            if human_val and gpt_val:
+                texts.append(create_prompt(human_val, gpt_val))
         except Exception:
             continue
     return {"text": texts}
@@ -164,7 +172,7 @@ def run_pipeline():
         model, tokenizer, reviewer_ds, "reviewer", f"{HF_USERNAME}/reviewer-lora"
     )
 
-    print("\n✨ All LoRAs trained and saved successfully!")
+    print("\nAll LoRAs trained and saved successfully!")
 
 
 if __name__ == "__main__":
