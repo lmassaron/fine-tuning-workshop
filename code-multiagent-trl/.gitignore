@@ -1,0 +1,8 @@
+venv/
+.venv/
+adapters/
+__pycache__/
+*.log
+outputs_coder/
+outputs_planner/
+outputs_reviewer/
