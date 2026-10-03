@@ -1,0 +1,27 @@
+[project]
+name = "gemma3-function-calling"
+version = "0.1.0"
+description = "Gemma 3 270M Parameter-Efficient Function Calling and Tool Use"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "torch",
+    "torchvision",
+    "transformers",
+    "trl",
+    "peft",
+    "accelerate",
+    "bitsandbytes",
+    "datasets",
+    "nbformat",
+    "pandas",
+    "numpy",
+    "matplotlib",
+    "tqdm",
+    "jupyter",
+    "ipykernel",
+]
+
+[tool.uv]
+index-url = "https://pypi.org/simple"
+extra-index-url = ["https://download.pytorch.org/whl/cu130"]
