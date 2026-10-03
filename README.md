@@ -6,7 +6,7 @@ All branches of this repository have been unified into structured, self-containe
 
 ---
 
-## 🧭 Repository Structure & Examples Index
+## Repository Structure & Examples Index
 
 | # | Directory | Theme & Purpose | Key Assets |
 | :-: | :--- | :--- | :--- |
@@ -25,7 +25,7 @@ All branches of this repository have been unified into structured, self-containe
 
 ---
 
-## ⚡ Quick Start: Running Any Example
+## Quick Start: Running Any Example
 
 Each directory is self-contained. To run an example:
 
@@ -54,7 +54,7 @@ Each directory is self-contained. To run an example:
 
 ---
 
-## 🖥️ Hardware Compatibility
+## Hardware Compatibility
 
 - **NVIDIA GPU**: Recommended 16GB+ VRAM (e.g., RTX 3090/4080/4090, A10, L4, A100, H100, GB10/GH200). 
 - **CUDA Support**: Scripts automatically configure indices for CUDA 11.8, 12.1, 12.4, 12.8, and 13.0 on `x86_64` and `aarch64`.
@@ -63,7 +63,7 @@ Each directory is self-contained. To run an example:
 
 ---
 
-## 🔑 Hugging Face Authentication & Setup
+## Hugging Face Authentication & Setup
 
 Several base models (such as `google/gemma-3-1b-it`, `nvidia/Nemotron-3-Embed-1B-BF16`, and gated datasets) require accepting their respective license terms on the Hugging Face Hub:
 
