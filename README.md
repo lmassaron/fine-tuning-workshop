@@ -8,19 +8,20 @@ All branches of this repository have been unified into structured, self-containe
 
 ## 🧭 Repository Structure & Examples Index
 
-| Directory | Theme & Purpose | Model(s) | Key Frameworks |
-| :--- | :--- | :--- | :--- |
-| [**`knowledge-injection-sherlock/`**](file:///home/lmassaron/code/fine-tuning-workshop/knowledge-injection-sherlock/README.md) | Domain knowledge injection via Wikipedia scraping, synthetic QA generation, and QLoRA. | `google/gemma-3-1b-it` | Transformers, PEFT, TRL, Synthetic Data Kit |
-| [**`reasoned-financial-sentiment/`**](file:///home/lmassaron/code/fine-tuning-workshop/reasoned-financial-sentiment/README.md) | Financial sentiment classification augmented with Chain-of-Thought (CoT) reasoning traces. | `google/gemma-3-1b-it`, `Qwen2.5-7B` | Transformers, TRL, PEFT, Datasets |
-| [**`tunix-med-jax/`**](file:///home/lmassaron/code/fine-tuning-workshop/tunix-med-jax/README.md) | High-throughput SFT on cardiology consultations using Google's Tunix library and JAX/XLA. | `google/gemma-3-270M-it` | Tunix, JAX, Flax, Optax |
-| [**`medical-expert-cardiology/`**](file:///home/lmassaron/code/fine-tuning-workshop/medical-expert-cardiology/README.md) | Clinical medical dialogue adaptation with target-token perplexity (PPL) evaluation. | `microsoft/Phi-4-mini-instruct` | Unsloth, TRL, PEFT, PyTorch |
-| [**`vision-finetuning-latex/`**](file:///home/lmassaron/code/fine-tuning-workshop/vision-finetuning-latex/README.md) | Multimodal VLM adaptation transcribing handwritten math equations into LaTeX OCR. | `Qwen/Qwen2-VL-2B-Instruct` | Unsloth Vision, Transformers, Torchvision |
-| [**`alignment-dpo/`**](file:///home/lmassaron/code/fine-tuning-workshop/alignment-dpo/README.md) | Preference alignment without separate reward models via Direct Preference Optimization (DPO). | `Qwen/Qwen2.5-3B` | TRL DPOTrainer, PEFT, PyTorch |
-| [**`alignment-grpo/`**](file:///home/lmassaron/code/fine-tuning-workshop/alignment-grpo/README.md) | Reasoning reinforcement learning with Group Relative Policy Optimization (GRPO) on GSM8K. | `Qwen/Qwen2.5-0.5B-Instruct` | TRL GRPOTrainer, Unsloth, PyTorch |
-| [**`gemma3-function-calling/`**](file:///home/lmassaron/code/fine-tuning-workshop/gemma3-function-calling/README.md) | Structured function calling and tool use under ChatML for ultra-compact language models. | `google/gemma-3-270m-it` | Transformers, TRL, PEFT |
-| [**`nemotron-embed-finetuning/`**](file:///home/lmassaron/code/fine-tuning-workshop/nemotron-embed-finetuning/README.md) | Dense embedding model adaptation with synthetic query generation and MNRL loss. | `nvidia/Nemotron-3-Embed-1B-BF16` | Sentence-Transformers, PEFT |
-| [**`code-multiagent/`**](file:///home/lmassaron/code/fine-tuning-workshop/code-multiagent/README.md) | Autonomous multi-agent coding system with dynamic LoRA adapter hot-swapping (Unsloth). | `Qwen/Qwen3-4B` | Unsloth, PEFT, Transformers |
-| [**`code-multiagent-trl/`**](file:///home/lmassaron/code/fine-tuning-workshop/code-multiagent-trl/README.md) | Autonomous multi-agent coding system with dynamic LoRA adapter hot-swapping (TRL & PEFT). | `Qwen/Qwen3-4B` | TRL, PEFT, BitsAndBytes |
+| # | Directory | Theme & Purpose | Key Assets |
+| :-: | :--- | :--- | :--- |
+| 1 | [**`knowledge-injection-sherlock/`**](file:///home/lmassaron/code/fine-tuning-workshop/knowledge-injection-sherlock/README.md) | Domain QA factual injection via Wikipedia scraping & QLoRA | Notebooks 01-04, setup guide |
+| 2 | [**`reasoned-financial-sentiment/`**](file:///home/lmassaron/code/fine-tuning-workshop/reasoned-financial-sentiment/README.md) | Financial sentiment classification with Chain-of-Thought reasoning | Notebooks 05-07, 09, unified SFT notebook & walkthrough |
+| 3 | [**`tunix-med-jax/`**](file:///home/lmassaron/code/fine-tuning-workshop/tunix-med-jax/README.md) | Cardiology SFT with Google's Tunix library & JAX/XLA GPU acceleration | Notebooks 05-08, synthetic kit configs, eval metrics |
+| 4 | [**`medical-expert-cardiology/`**](file:///home/lmassaron/code/fine-tuning-workshop/medical-expert-cardiology/README.md) | Clinical dialogue adaptation with token-level perplexity validation | Phi-4-mini SFT notebook & comprehensive walkthrough |
+| 5 | [**`vision-finetuning-latex/`**](file:///home/lmassaron/code/fine-tuning-workshop/vision-finetuning-latex/README.md) | Multimodal VLM adaptation for handwritten formula LaTeX OCR | Qwen2-VL Unsloth notebook & walkthrough |
+| 6 | [**`alignment-dpo/`**](file:///home/lmassaron/code/fine-tuning-workshop/alignment-dpo/README.md) | Direct Preference Optimization (DPO) pairwise alignment | Qwen2.5-3B DPO notebook & walkthrough |
+| 7 | [**`alignment-grpo/`**](file:///home/lmassaron/code/fine-tuning-workshop/alignment-grpo/README.md) | Mathematical reasoning RL via Group Relative Policy Optimization | Qwen2.5 GSM8K notebook (TRL + Unsloth), training curves |
+| 8 | [**`gemma3-function-calling/`**](file:///home/lmassaron/code/fine-tuning-workshop/gemma3-function-calling/README.md) | Structured tool use and ChatML JSON function calling on Gemma 3 270M | Function calling notebook, generator script & walkthrough |
+| 9 | [**`nemotron-embed-finetuning/`**](file:///home/lmassaron/code/fine-tuning-workshop/nemotron-embed-finetuning/README.md) | Dense embedding model adaptation with synthetic queries & MNRL loss | Nemotron-3 notebook, schema, and walkthrough |
+| 10 | [**`code-multiagent/`**](file:///home/lmassaron/code/fine-tuning-workshop/code-multiagent/README.md) | Autonomous multi-agent coding system with dynamic LoRA swapping (Unsloth) | Agent CLI, LoRA training pipeline, test suite, adapters |
+| 11 | [**`code-multiagent-trl/`**](file:///home/lmassaron/code/fine-tuning-workshop/code-multiagent-trl/README.md) | Autonomous multi-agent coding system with dynamic LoRA swapping (TRL & PEFT) | Agent CLI, pure HF TRL/PEFT pipeline, benchmark results |
+
 
 ---
 
