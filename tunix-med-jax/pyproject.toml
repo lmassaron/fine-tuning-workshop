@@ -1,0 +1,27 @@
+[project]
+name = "tunix-med-jax"
+version = "0.1.0"
+description = "Tunix & JAX Accelerated Medical Cardiology SFT Pipeline"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "jax[cuda12]",
+    "tunix",
+    "flax",
+    "optax",
+    "transformers",
+    "datasets",
+    "huggingface_hub",
+    "sentence-transformers",
+    "pandas",
+    "numpy",
+    "scikit-learn",
+    "matplotlib",
+    "tqdm",
+    "pyyaml",
+    "jupyter",
+    "ipykernel",
+]
+
+[tool.uv]
+index-url = "https://pypi.org/simple"

@@ -1,0 +1,82 @@
+
+# Master configuration for Synthetic Data Kit
+
+paths:
+  input:
+    txt: "data/medical_input"
+  output:
+    generated: "data/generated"
+    curated: "data/curated"
+    final: "data/final"
+
+vllm:
+  api_base: "http://localhost:8000/v1"
+  port: 8000
+  model: "Qwen/Qwen2.5-7B-Instruct-AWQ"
+  max_retries: 3
+  retry_delay: 1.0
+
+ingest:
+  default_format: "txt"
+
+generation:
+  temperature: 0.4
+  top_p: 0.95
+  chunk_size: 1022
+  overlap: 64
+  max_tokens: 1024
+  num_pairs: 30
+
+curate:
+  threshold: 7.0
+  batch_size: 4
+  temperature: 0.3
+
+format:
+  default: "jsonl"
+  include_metadata: true
+  pretty_json: true
+
+prompts:
+  summary: |
+    Summarize the following medical text in 3-5 concise sentences.
+    Focus on the key clinical concepts, diagnostic criteria, and treatment highlights.
+    Return ONLY the summary text, no preamble.
+    Text: {text}
+
+  qa_generation: |
+    Create 30 question-answer pairs from this medical text for clinical training.
+    Focus on diagnostic criteria, treatments, and pathophysiology.
+    Output ONLY a valid JSON array, no explanations, no markdown:
+
+    [
+      {{
+        "question": "Question 1?",
+        "answer": "Answer 1."
+      }},
+      {{
+        "question": "Question 2?",
+        "answer": "Answer 2."
+      }}
+    ]
+
+    Text: {text}
+
+  qa_rating: |
+    Rate each of these question-answer pairs for quality and return exactly this JSON format:
+
+    [
+      {{"question": "same question text", "answer": "same answer text", "rating": n}}
+    ]
+
+    Where n is a number from 1-10, using this scale:
+    1=wrong/nonsensical
+    3=vague/incomplete
+    5=correct but generic
+    7=accurate and useful
+    9=insightful and precise
+    10=perfect
+
+    DO NOT include any text outside of the JSON array, just return valid JSON:
+
+    {pairs}
