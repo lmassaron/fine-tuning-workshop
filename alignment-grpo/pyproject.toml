@@ -1,0 +1,27 @@
+[project]
+name = "alignment-grpo"
+version = "0.1.0"
+description = "Mathematical Reasoning Alignment via Group Relative Policy Optimization (GRPO)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "torch",
+    "torchvision",
+    "unsloth",
+    "transformers",
+    "trl>=0.19.0",
+    "peft",
+    "accelerate",
+    "bitsandbytes",
+    "datasets",
+    "pandas",
+    "numpy",
+    "matplotlib",
+    "tqdm",
+    "jupyter",
+    "ipykernel",
+]
+
+[tool.uv]
+index-url = "https://pypi.org/simple"
+extra-index-url = ["https://download.pytorch.org/whl/cu130"]

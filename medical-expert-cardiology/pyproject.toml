@@ -1,0 +1,28 @@
+[project]
+name = "medical-expert-cardiology"
+version = "0.1.0"
+description = "Clinical Cardiology QA Expert Adaptation using Phi-4-mini and Unsloth"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "torch",
+    "torchvision",
+    "unsloth",
+    "transformers",
+    "trl",
+    "peft",
+    "accelerate",
+    "bitsandbytes",
+    "datasets",
+    "pandas",
+    "numpy",
+    "scikit-learn",
+    "matplotlib",
+    "tqdm",
+    "jupyter",
+    "ipykernel",
+]
+
+[tool.uv]
+index-url = "https://pypi.org/simple"
+extra-index-url = ["https://download.pytorch.org/whl/cu130"]

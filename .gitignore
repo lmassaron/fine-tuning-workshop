@@ -206,3 +206,21 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 nemotron-embed-finetuning/nemotron-embed-finetuned/
+
+# Model adapters, training outputs, and caches
+*-adapter/
+*-output/
+outputs_*/
+adapters/
+unsloth_compiled_cache/
+_unsloth_sentencepiece_temp/
+test_gemma3_output/
+model_check.txt
+*.log
+data/
+data_old/
+FinancialPhraseBank_*/
+temp_*/
+tunix-medical-model/
+*.csv
+

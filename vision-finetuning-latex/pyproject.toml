@@ -1,0 +1,29 @@
+[project]
+name = "vision-finetuning-latex"
+version = "0.1.0"
+description = "Multimodal Vision LaTeX OCR Transcription using Qwen2-VL and Unsloth"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "torch",
+    "torchvision",
+    "unsloth",
+    "transformers",
+    "trl",
+    "peft",
+    "accelerate",
+    "bitsandbytes",
+    "datasets",
+    "pillow",
+    "qwen-vl-utils",
+    "pandas",
+    "numpy",
+    "matplotlib",
+    "tqdm",
+    "jupyter",
+    "ipykernel",
+]
+
+[tool.uv]
+index-url = "https://pypi.org/simple"
+extra-index-url = ["https://download.pytorch.org/whl/cu130"]
