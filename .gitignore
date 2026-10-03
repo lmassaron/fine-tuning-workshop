@@ -224,3 +224,5 @@ temp_*/
 tunix-medical-model/
 *.csv
 
+lora_config_sig.txt
+gemma-3-270M-it-function_calling/
