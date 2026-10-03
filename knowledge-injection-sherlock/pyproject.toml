@@ -1,0 +1,33 @@
+[project]
+name = "knowledge-injection-sherlock"
+version = "0.1.0"
+description = "Domain Knowledge Injection via Synthetic Data & QLoRA Fine-Tuning (Sherlock Holmes Expert)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "torch",
+    "torchvision",
+    "transformers",
+    "trl",
+    "peft",
+    "accelerate",
+    "bitsandbytes",
+    "datasets",
+    "evaluate",
+    "sentence-transformers",
+    "sentencepiece",
+    "wikipedia-api",
+    "synthetic-data-kit",
+    "pandas",
+    "numpy",
+    "scikit-learn",
+    "matplotlib",
+    "tqdm",
+    "tenacity",
+    "jupyter",
+    "ipykernel",
+]
+
+[tool.uv]
+index-url = "https://pypi.org/simple"
+extra-index-url = ["https://download.pytorch.org/whl/cu130"]

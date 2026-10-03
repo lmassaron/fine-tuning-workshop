@@ -1,0 +1,30 @@
+[project]
+name = "reasoned-financial-sentiment"
+version = "0.1.0"
+description = "Chain-of-Thought Reasoning Distillation & Financial Sentiment Classification"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "torch",
+    "torchvision",
+    "transformers",
+    "trl",
+    "peft",
+    "accelerate",
+    "bitsandbytes",
+    "datasets",
+    "evaluate",
+    "sentencepiece",
+    "pandas",
+    "numpy",
+    "scikit-learn",
+    "matplotlib",
+    "tqdm",
+    "tenacity",
+    "jupyter",
+    "ipykernel",
+]
+
+[tool.uv]
+index-url = "https://pypi.org/simple"
+extra-index-url = ["https://download.pytorch.org/whl/cu130"]
