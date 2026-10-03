@@ -1,0 +1,28 @@
+[project]
+name = "nemotron-embed-finetuning"
+version = "0.1.0"
+description = "Fine-Tuning NVIDIA Nemotron-3 Embedding Model with Synthetic Data & LoRA"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "torch",
+    "torchvision",
+    "sentence-transformers",
+    "transformers",
+    "peft",
+    "accelerate",
+    "bitsandbytes",
+    "datasets",
+    "trl",
+    "pandas",
+    "numpy",
+    "scikit-learn",
+    "matplotlib",
+    "tqdm",
+    "jupyter",
+    "ipykernel",
+]
+
+[tool.uv]
+index-url = "https://pypi.org/simple"
+extra-index-url = ["https://download.pytorch.org/whl/cu130"]
