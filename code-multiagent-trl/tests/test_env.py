@@ -8,26 +8,34 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 class TestEnvironmentSanity(unittest.TestCase):
     def test_imports_and_torch(self):
-        """Verify PyTorch version and CUDA availability."""
+        """Verify PyTorch version and hardware acceleration (CUDA or Apple Silicon MPS)."""
         import torch
 
         print(f"Torch Version: {torch.__version__}")
+        has_accel = torch.cuda.is_available() or (
+            hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+        )
         self.assertTrue(
-            torch.cuda.is_available(), "CUDA is not available on this device!"
+            has_accel, "Neither CUDA nor Apple Silicon MPS acceleration is available on this device!"
         )
 
     def test_transformers_and_peft_import(self):
-        """Verify that Transformers, BitsAndBytes and PEFT libraries can be imported successfully."""
+        """Verify that Transformers, PEFT, and (if on CUDA) BitsAndBytes libraries can be imported successfully."""
+        import torch
         import transformers
         import peft
-        import bitsandbytes
 
         print(
-            f"Transformers ({transformers.__version__}), PEFT ({peft.__version__}), BitsAndBytes ({bitsandbytes.__version__}) imported successfully!"
+            f"Transformers ({transformers.__version__}), PEFT ({peft.__version__}) imported successfully!"
         )
         self.assertIsNotNone(transformers.__version__)
         self.assertIsNotNone(peft.__version__)
-        self.assertIsNotNone(bitsandbytes.__version__)
+
+        if torch.cuda.is_available():
+            import bitsandbytes
+
+            print(f"BitsAndBytes ({bitsandbytes.__version__}) imported successfully!")
+            self.assertIsNotNone(bitsandbytes.__version__)
 
     def test_dataset_mapping(self):
         """Verify that Hugging Face datasets can be mapped successfully."""

@@ -1,5 +1,5 @@
 [project]
-name = "code-multiagent"
+name = "code-multiagent-unsloth"
 version = "0.1.0"
 description = "Local Coding Multi-Agent System with Dynamic LoRA Hot-Swapping"
 readme = "tutorial.md"

@@ -18,7 +18,7 @@ TRACKS=(
     "alignment-grpo"
     "gemma3-function-calling"
     "nemotron-embed-finetuning"
-    "code-multiagent"
+    "code-multiagent-unsloth"
     "code-multiagent-trl"
 )
 

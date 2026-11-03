@@ -60,6 +60,27 @@ def format_reviewer_data(examples):
 import json
 
 
+def get_device():
+    """Detects best available hardware: CUDA (NVIDIA GPU) > MPS (Apple Silicon) > CPU."""
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
+def clear_memory():
+    """Cleans garbage and frees VRAM/unified memory cache across CUDA and MPS."""
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        try:
+            torch.mps.empty_cache()
+        except Exception:
+            pass
+
+
 def update_training_times(role, duration_seconds, completed_at):
     times_file = "training_times.json"
     data = {}
@@ -84,6 +105,10 @@ def update_training_times(role, duration_seconds, completed_at):
 def train_lora(model, tokenizer, dataset, output_name, push_repo_name, resume_from_checkpoint=None):
     print(f"\n--- Training {output_name} with TRL SFTTrainer ---")
 
+    device = get_device()
+    is_cuda = (device.type == "cuda")
+    is_mps = (device.type == "mps")
+
     peft_config = LoraConfig(
         r=16,
         lora_alpha=16,
@@ -95,6 +120,19 @@ def train_lora(model, tokenizer, dataset, output_name, push_repo_name, resume_fr
         bias="none",
         task_type="CAUSAL_LM",
     )
+
+    if is_cuda:
+        bf16 = torch.cuda.is_bf16_supported()
+        fp16 = not bf16
+        optim = "paged_adamw_8bit"
+    elif is_mps:
+        bf16 = False
+        fp16 = True
+        optim = "adamw_torch"
+    else:
+        bf16 = False
+        fp16 = False
+        optim = "adamw_torch"
 
     trainer = SFTTrainer(
         model=model,
@@ -117,9 +155,9 @@ def train_lora(model, tokenizer, dataset, output_name, push_repo_name, resume_fr
             lr_scheduler_type="cosine",
             weight_decay=0.01,
             # Optimizer & Precision
-            optim="paged_adamw_8bit",
-            bf16=torch.cuda.is_bf16_supported(),
-            fp16=not torch.cuda.is_bf16_supported(),
+            optim=optim,
+            bf16=bf16,
+            fp16=fp16,
             # Checkpointing & Logging
             logging_steps=10,
             save_strategy="steps",
@@ -167,23 +205,46 @@ def prepare_base_model(model_id):
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.eos_token = "<|im_end|>"
 
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16
-        if torch.cuda.is_bf16_supported()
-        else torch.float16,
-        bnb_4bit_use_double_quant=True,
-    )
+    device = get_device()
 
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id,
-        quantization_config=bnb_config,
-        device_map="auto",
-        dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,
-        trust_remote_code=True,
-    )
-    model = prepare_model_for_kbit_training(model)
+    if device.type == "cuda":
+        compute_dtype = (
+            torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+        )
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=compute_dtype,
+            bnb_4bit_use_double_quant=True,
+        )
+
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            quantization_config=bnb_config,
+            device_map="auto",
+            torch_dtype=compute_dtype,
+            trust_remote_code=True,
+        )
+        model = prepare_model_for_kbit_training(model)
+    elif device.type == "mps":
+        compute_dtype = (
+            torch.bfloat16 if torch.backends.mps.is_built() else torch.float16
+        )
+        print(f"[TrainLoRAs] Loading base model on Apple Silicon MPS ({compute_dtype})...")
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            device_map="auto",
+            torch_dtype=compute_dtype,
+            trust_remote_code=True,
+        )
+    else:
+        print("[TrainLoRAs] Loading base model on CPU (float32)...")
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            torch_dtype=torch.float32,
+            trust_remote_code=True,
+        )
+
     return model, tokenizer
 
 
@@ -202,8 +263,7 @@ def run_pipeline():
         )
         train_lora(model, tokenizer, planner_ds, "planner", f"{HF_USERNAME}/planner-lora")
         del (model, tokenizer, planner_ds)
-        gc.collect()
-        torch.cuda.empty_cache()
+        clear_memory()
 
     # 2. CODER / TOOL USER
     if os.path.exists("adapters/coder-lora/adapter_model.safetensors"):
@@ -218,8 +278,7 @@ def run_pipeline():
         )
         train_lora(model, tokenizer, coder_ds, "coder", f"{HF_USERNAME}/coder-lora")
         del (model, tokenizer, coder_ds)
-        gc.collect()
-        torch.cuda.empty_cache()
+        clear_memory()
 
     # 3. REVIEWER
     model, tokenizer = prepare_base_model(MODEL_ID)
@@ -238,8 +297,7 @@ def run_pipeline():
         model, tokenizer, reviewer_ds, "reviewer", f"{HF_USERNAME}/reviewer-lora", resume_from_checkpoint=resume_ckpt
     )
     del (model, tokenizer, reviewer_ds)
-    gc.collect()
-    torch.cuda.empty_cache()
+    clear_memory()
 
 
 if __name__ == "__main__":

@@ -16,30 +16,73 @@ LORA_ADAPTERS = {
 }
 
 
+def get_device():
+    """Detects best available hardware: CUDA (NVIDIA GPU) > MPS (Apple Silicon) > CPU."""
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
+def clear_memory():
+    """Cleans garbage and frees VRAM/unified memory cache across CUDA and MPS."""
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        try:
+            torch.mps.empty_cache()
+        except Exception:
+            pass
+
+
 def prepare_base_model(model_id):
-    """Loads tokenizer and 4-bit quantized base model."""
-    print(f"[LoRAManager] Loading base model: {model_id} (4-bit NF4)...")
+    """Loads tokenizer and base model (4-bit NF4 on CUDA, half-precision on Apple Silicon MPS or CPU)."""
+    device = get_device()
     tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.eos_token = "<|im_end|>"
 
-    compute_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=compute_dtype,
-        bnb_4bit_use_double_quant=True,
-    )
+    if device.type == "cuda":
+        compute_dtype = (
+            torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+        )
+        print(f"[LoRAManager] Loading base model: {model_id} (CUDA 4-bit NF4, {compute_dtype})...")
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=compute_dtype,
+            bnb_4bit_use_double_quant=True,
+        )
+        base_model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            quantization_config=bnb_config,
+            device_map="auto",
+            torch_dtype=compute_dtype,
+            trust_remote_code=True,
+        )
+    elif device.type == "mps":
+        compute_dtype = (
+            torch.bfloat16 if torch.backends.mps.is_built() else torch.float16
+        )
+        print(f"[LoRAManager] Loading base model: {model_id} (Apple Silicon MPS, {compute_dtype})...")
+        base_model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            device_map="auto",
+            torch_dtype=compute_dtype,
+            trust_remote_code=True,
+        )
+    else:
+        print(f"[LoRAManager] Loading base model: {model_id} (CPU, float32)...")
+        base_model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            torch_dtype=torch.float32,
+            trust_remote_code=True,
+        )
 
-    base_model = AutoModelForCausalLM.from_pretrained(
-        model_id,
-        quantization_config=bnb_config,
-        device_map="auto",
-        dtype=compute_dtype,
-        trust_remote_code=True,
-    )
-    return base_model, tokenizer
+    return base_model, tokenizer, device
 
 
 def load_adapters(base_model, adapters):
@@ -57,7 +100,7 @@ class LoRAManager:
     """Dynamically swaps LoRA adapters on a single base model using pure Hugging Face PEFT."""
 
     def __init__(self, model_id):
-        base_model, self.tokenizer = prepare_base_model(model_id)
+        base_model, self.tokenizer, self.device = prepare_base_model(model_id)
         self.model = load_adapters(base_model, LORA_ADAPTERS)
         self.active_adapter = "planner"
 
@@ -65,8 +108,7 @@ class LoRAManager:
         """Swaps the active LoRA adapter."""
         if role_name not in LORA_ADAPTERS and role_name != "base":
             role_name = "base"
-        gc.collect()
-        torch.cuda.empty_cache()
+        clear_memory()
 
         if role_name != "base":
             try:
@@ -94,7 +136,7 @@ class LoRAManager:
             messages, tokenize=False, add_generation_prompt=True
         )
 
-        inputs = self.tokenizer(text=text, return_tensors="pt").to("cuda")
+        inputs = self.tokenizer(text=text, return_tensors="pt").to(self.device)
 
         with torch.no_grad():
             outputs = self.model.generate(

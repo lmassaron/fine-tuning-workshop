@@ -19,7 +19,7 @@ All branches of this repository have been unified into structured, self-containe
 | 7 | [**`alignment-grpo/`**](file:///home/lmassaron/code/fine-tuning-workshop/alignment-grpo/README.md) | Mathematical reasoning RL via Group Relative Policy Optimization | Qwen2.5 GSM8K notebook (TRL + Unsloth), training curves |
 | 8 | [**`gemma3-function-calling/`**](file:///home/lmassaron/code/fine-tuning-workshop/gemma3-function-calling/README.md) | Structured tool use and ChatML JSON function calling on Gemma 3 270M | Function calling notebook, generator script & walkthrough |
 | 9 | [**`nemotron-embed-finetuning/`**](file:///home/lmassaron/code/fine-tuning-workshop/nemotron-embed-finetuning/README.md) | Dense embedding model adaptation with synthetic queries & MNRL loss | Nemotron-3 notebook, schema, and walkthrough |
-| 10 | [**`code-multiagent/`**](file:///home/lmassaron/code/fine-tuning-workshop/code-multiagent/README.md) | Autonomous multi-agent coding system with dynamic LoRA swapping (Unsloth) | Agent CLI, LoRA training pipeline, test suite, adapters |
+| 10 | [**`code-multiagent-unsloth/`**](file:///home/lmassaron/code/fine-tuning-workshop/code-multiagent-unsloth/README.md) | Autonomous multi-agent coding system with dynamic LoRA swapping (Unsloth) | Agent CLI, LoRA training pipeline, test suite, adapters |
 | 11 | [**`code-multiagent-trl/`**](file:///home/lmassaron/code/fine-tuning-workshop/code-multiagent-trl/README.md) | Autonomous multi-agent coding system with dynamic LoRA swapping (TRL & PEFT) | Agent CLI, pure HF TRL/PEFT pipeline, benchmark results |
 
 
@@ -51,6 +51,33 @@ Each directory is self-contained. To run an example:
    source .venv/bin/activate
    jupyter lab   # or run the scripts directly
    ```
+
+---
+
+## Hardware Compatibility & DGX Spark VRAM Benchmarks
+
+Every track has been benchmarked on the local **DGX Spark** instance equipped with an **NVIDIA GB10** (Grace Blackwell architecture, 121.69 GB unified memory, Driver 580.178.04, CUDA 13.0).
+
+The table below details hardware compatibility (NVIDIA GPU vs Apple Silicon MPS) and the measured peak VRAM footprint during model loading and training/inference execution:
+
+| Track # | Directory | Base Model | Platform Support | Peak VRAM (GB10) | Notes |
+| :---: | :--- | :--- | :--- | :---: | :--- |
+| **1** | [**`knowledge-injection-sherlock`**](file:///home/lmassaron/code/fine-tuning-workshop/knowledge-injection-sherlock/README.md) | `google/gemma-3-1b-it` | CUDA + Apple Silicon (MPS) | **3.72 GB** | QLoRA SFT (`adamw_torch_fused`, bf16) |
+| **2** | [**`reasoned-financial-sentiment`**](file:///home/lmassaron/code/fine-tuning-workshop/reasoned-financial-sentiment/README.md) | `google/gemma-4-E2B-it` | CUDA + Apple Silicon (MPS) | **8.86 GB** | 4-bit NF4 QLoRA SFT with Chain-of-Thought reasoning |
+| **3** | [**`tunix-med-jax`**](file:///home/lmassaron/code/fine-tuning-workshop/tunix-med-jax/README.md) | `google/gemma-3-270m-it` | CUDA + Apple Silicon (MPS) | **0.54 GB** | Tunix JAX/XLA SFT & PyTorch evaluation |
+| **4** | [**`medical-expert-cardiology`**](file:///home/lmassaron/code/fine-tuning-workshop/medical-expert-cardiology/README.md) | `unsloth/Phi-4-mini-instruct` | **NVIDIA GPU only** (Unsloth) | **6.57 GB** | 4-bit SFT with Unsloth kernel acceleration |
+| **5** | [**`vision-finetuning-latex`**](file:///home/lmassaron/code/fine-tuning-workshop/vision-finetuning-latex/README.md) | `unsloth/Qwen2-VL-2B-Instruct` | **NVIDIA GPU only** (Unsloth) | **2.43 GB** | 4-bit VLM vision & language LoRA |
+| **6** | [**`alignment-dpo`**](file:///home/lmassaron/code/fine-tuning-workshop/alignment-dpo/README.md) | `unsloth/Qwen2.5-3B-Instruct` | **NVIDIA GPU only** (Unsloth) | **2.29 GB** | 4-bit Direct Preference Optimization (DPO) |
+| **7** | [**`alignment-grpo`**](file:///home/lmassaron/code/fine-tuning-workshop/alignment-grpo/README.md) | `Qwen/Qwen2.5-0.5B-Instruct` | **NVIDIA GPU only** (Unsloth/vLLM) | **3.04 GB** | Group Relative Policy Optimization (RL) |
+| **8** | [**`gemma3-function-calling`**](file:///home/lmassaron/code/fine-tuning-workshop/gemma3-function-calling/README.md) | `google/gemma-3-1b-it` | CUDA + Apple Silicon (MPS) | **1.54 GB** | Structured JSON tool-calling SFT |
+| **9** | [**`nemotron-embed-finetuning`**](file:///home/lmassaron/code/fine-tuning-workshop/nemotron-embed-finetuning/README.md) | `nvidia/llama-3.2-nv-embedqa-1b-v2` | CUDA + Apple Silicon (MPS) | **9.06 GB** | MultipleNegativesRankingLoss dense retrieval SFT |
+| **10** | [**`code-multiagent-unsloth`**](file:///home/lmassaron/code/fine-tuning-workshop/code-multiagent-unsloth/README.md) | `Qwen/Qwen2.5-Coder-1.5B-Instruct` | **NVIDIA GPU only** (Unsloth) | **3.66 GB** | Dual LoRA agents with fast Unsloth inference |
+| **11** | [**`code-multiagent-trl`**](file:///home/lmassaron/code/fine-tuning-workshop/code-multiagent-trl/README.md) | `Qwen/Qwen2.5-Coder-1.5B-Instruct` | CUDA + Apple Silicon (MPS) + CPU | **3.01 GB** | Cross-platform Hugging Face TRL multi-agent system |
+
+### Platform Notes:
+- **NVIDIA GPU (CUDA)**: Full support across all 11 tracks. Supports 4-bit bitsandbytes quantization, flash-attention, fused optimizers, and Unsloth acceleration.
+- **Apple Silicon (MPS)**: Supported across all pure Hugging Face / PyTorch / JAX tracks (Tracks 1, 2, 3, 8, 9, and 11). Tracks gracefully fall back to native half-precision (`bfloat16`/`float16`) to leverage Apple Silicon unified memory without bitsandbytes CUDA constraints.
+- **Unsloth Tracks (GPU Only)**: Tracks 4, 5, 6, 7, and 10 rely on Unsloth custom CUDA / Triton kernels and require an NVIDIA GPU.
 
 ---
 

@@ -5,7 +5,7 @@
 This document records the migration and verification of the local multi-agent system from **Unsloth** to pure Hugging Face **TRL (Transformer Reinforcement Learning)**, **PEFT (Parameter-Efficient Fine-Tuning)**, **Transformers**, and **BitsAndBytes**.
 
 ### Key Architectural Transformations:
-| Component | Original (`code-multiagent`) | Ported (`code-multiagent-trl`) |
+| Component | Original (`code-multiagent-unsloth`) | Ported (`code-multiagent-trl`) |
 | :--- | :--- | :--- |
 | **Engine / Framework** | `unsloth` (`FastLanguageModel`) | Hugging Face `transformers` + `peft` + `trl` |
 | **Quantization** | Unsloth 4-bit integration | `transformers.BitsAndBytesConfig` (4-bit NF4, double quant, bfloat16 compute) |
