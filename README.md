@@ -54,7 +54,7 @@ Each directory is self-contained. To run an example:
 
 ---
 
-## Hardware Compatibility & DGX Spark VRAM Benchmarks
+## DGX Spark (NVIDIA GB10) Benchmarks & Memory Usage
 
 Every track has been benchmarked on the local **DGX Spark** instance equipped with an **NVIDIA GB10** (Grace Blackwell architecture, 121.69 GB unified memory, Driver 580.178.04, CUDA 13.0).
 
@@ -74,19 +74,11 @@ The table below details hardware compatibility (NVIDIA GPU vs Apple Silicon MPS)
 | **10** | [**`code-multiagent-unsloth`**](file:///home/lmassaron/code/fine-tuning-workshop/code-multiagent-unsloth/README.md) | `Qwen/Qwen2.5-Coder-1.5B-Instruct` | **NVIDIA GPU only** (Unsloth) | **3.66 GB** | Dual LoRA agents with fast Unsloth inference |
 | **11** | [**`code-multiagent-trl`**](file:///home/lmassaron/code/fine-tuning-workshop/code-multiagent-trl/README.md) | `Qwen/Qwen2.5-Coder-1.5B-Instruct` | CUDA + Apple Silicon (MPS) + CPU | **3.01 GB** | Cross-platform Hugging Face TRL multi-agent system |
 
-### Platform Notes:
-- **NVIDIA GPU (CUDA)**: Full support across all 11 tracks. Supports 4-bit bitsandbytes quantization, flash-attention, fused optimizers, and Unsloth acceleration.
+### Platform Compatibility Summary:
+- **NVIDIA GPU (CUDA)**: Full support across all 11 tracks. Supports 4-bit bitsandbytes quantization, flash-attention, fused optimizers, and Unsloth acceleration. Recommended 16GB+ VRAM (RTX 3090/4080/4090, A10, L4, A100, H100, GB10/GH200). Scripts auto-detect CUDA 11.8, 12.1, 12.4, 12.8, and 13.0 on `x86_64` and `aarch64`.
 - **Apple Silicon (MPS)**: Supported across all pure Hugging Face / PyTorch / JAX tracks (Tracks 1, 2, 3, 8, 9, and 11). Tracks gracefully fall back to native half-precision (`bfloat16`/`float16`) to leverage Apple Silicon unified memory without bitsandbytes CUDA constraints.
 - **Unsloth Tracks (GPU Only)**: Tracks 4, 5, 6, 7, and 10 rely on Unsloth custom CUDA / Triton kernels and require an NVIDIA GPU.
-
----
-
-## Hardware Compatibility
-
-- **NVIDIA GPU**: Recommended 16GB+ VRAM (e.g., RTX 3090/4080/4090, A10, L4, A100, H100, GB10/GH200). 
-- **CUDA Support**: Scripts automatically configure indices for CUDA 11.8, 12.1, 12.4, 12.8, and 13.0 on `x86_64` and `aarch64`.
-- **Apple Silicon (MPS)**: Compatible notebooks support PyTorch MPS fallback for local experimentation on M-series Macs with unified memory.
-- **Google Colab**: Free-tier T4 and L4 runtimes are supported using 4-bit NormalFloat (NF4) quantization.
+- **Google Colab**: Free-tier T4 and L4 runtimes are supported across non-Unsloth and Unsloth tracks using 4-bit NormalFloat (NF4) quantization.
 
 ---
 
