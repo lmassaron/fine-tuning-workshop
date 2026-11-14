@@ -47,6 +47,9 @@ if [ "$HAS_NVIDIA_GPU" = true ]; then
     uv pip install -U \
         --python "$VENV_PYTHON" \
         "jax[cuda12]"
+elif [ "$OS_TYPE" = "Darwin" ]; then
+    echo ">>> Apple Silicon / macOS detected. Installing JAX..."
+    uv pip install -U --python "$VENV_PYTHON" "jax"
 else
     echo ">>> Installing CPU JAX..."
     uv pip install -U --python "$VENV_PYTHON" "jax"

@@ -71,7 +71,8 @@ if [ "$HAS_NVIDIA_GPU" = true ]; then
     echo ">>> Installing PyTorch with CUDA support ($PT_CU_VERSION)..."
     uv pip install -U \
         --python "$VENV_PYTHON" \
-        --extra-index-url "https://download.pytorch.org/whl/$PT_CU_VERSION" \
+        --default-index "https://download.pytorch.org/whl/$PT_CU_VERSION" \
+        --index-strategy first-index \
         "torch" "torchvision" "torchaudio"
 elif [ "$OS_TYPE" = "Darwin" ]; then
     echo ">>> Apple Silicon / macOS detected. Installing PyTorch with MPS support..."

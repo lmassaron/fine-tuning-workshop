@@ -71,11 +71,15 @@ if [ "$HAS_NVIDIA_GPU" = true ]; then
     echo ">>> Installing PyTorch with CUDA support ($PT_CU_VERSION)..."
     uv pip install -U \
         --python "$VENV_PYTHON" \
-        --extra-index-url "https://download.pytorch.org/whl/$PT_CU_VERSION" \
+        --default-index "https://download.pytorch.org/whl/$PT_CU_VERSION" \
+        --index-strategy first-index \
         "torch" "torchvision" "torchaudio"
 
     echo ">>> Installing Unsloth and xformers..."
     uv pip install -U --python "$VENV_PYTHON" "unsloth" || true
+elif [ "$OS_TYPE" = "Darwin" ]; then
+    echo ">>> Apple Silicon / macOS detected. Installing PyTorch with MPS support..."
+    uv pip install -U --python "$VENV_PYTHON" "torch" "torchvision" "torchaudio"
 else
     echo ">>> Installing CPU PyTorch..."
     uv pip install -U --python "$VENV_PYTHON" "torch" "torchvision" "torchaudio"
@@ -87,10 +91,16 @@ uv pip install -U \
     --python "$VENV_PYTHON" \
     "transformers" \
     "accelerate" \
-    "bitsandbytes" \
     "peft" \
     "datasets" \
     "trl"
+
+if [ "$HAS_NVIDIA_GPU" = true ]; then
+    uv pip install -U --python "$VENV_PYTHON" "bitsandbytes"
+else
+    # bitsandbytes is optional for MPS / CPU inference
+    uv pip install -U --python "$VENV_PYTHON" "bitsandbytes" || true
+fi
 
 echo ""
 echo "✅ Environment setup complete in $SCRIPT_DIR/$VENV_NAME"
