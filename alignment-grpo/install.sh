@@ -43,10 +43,12 @@ VENV_PYTHON="$SCRIPT_DIR/$VENV_NAME/bin/python"
 
 # Determine PyTorch Index for GPU
 if [ "$HAS_NVIDIA_GPU" = true ]; then
-    CUDA_VERSION_STRING=$(nvidia-smi | grep "CUDA Version" | sed -n 's/.*CUDA Version: \([0-9\.]*\).*/\1/p')
+    CUDA_VERSION_STRING=$(nvidia-smi | grep -oP 'CUDA Version: \K[0-9.]+' 2>/dev/null || nvidia-smi | grep "CUDA Version" | sed -n 's/.*CUDA Version: \([0-9\.]*\).*/\1/p' || echo "12.4")
     echo ">>> Detected CUDA Version: $CUDA_VERSION_STRING"
     CUDA_MAJOR=$(echo "$CUDA_VERSION_STRING" | cut -d. -f1)
     CUDA_MINOR=$(echo "$CUDA_VERSION_STRING" | cut -d. -f2)
+    CUDA_MAJOR=${CUDA_MAJOR:-12}
+    CUDA_MINOR=${CUDA_MINOR:-4}
 
     if [ "$ARCH" = "aarch64" ]; then
         PT_CU_VERSION="cu130"
@@ -56,6 +58,8 @@ if [ "$HAS_NVIDIA_GPU" = true ]; then
         elif [ "$CUDA_MAJOR" -eq 12 ]; then
             if [ "$CUDA_MINOR" -ge 8 ]; then
                 PT_CU_VERSION="cu128"
+            elif [ "$CUDA_MINOR" -ge 6 ]; then
+                PT_CU_VERSION="cu126"
             elif [ "$CUDA_MINOR" -ge 4 ]; then
                 PT_CU_VERSION="cu124"
             elif [ "$CUDA_MINOR" -ge 1 ]; then
@@ -73,16 +77,20 @@ if [ "$HAS_NVIDIA_GPU" = true ]; then
         --python "$VENV_PYTHON" \
         --default-index "https://download.pytorch.org/whl/$PT_CU_VERSION" \
         --index-strategy first-index \
-        "torch" "torchvision"
+        "torch"
 
     echo ">>> Installing Unsloth and vLLM..."
+    export UNSLOTH_SKIP_TORCHVISION_CHECK=1
     uv pip install -U --python "$VENV_PYTHON" "unsloth" || true
+    if ! grep -q "UNSLOTH_SKIP_TORCHVISION_CHECK" "$SCRIPT_DIR/$VENV_NAME/bin/activate"; then
+        echo 'export UNSLOTH_SKIP_TORCHVISION_CHECK=1' >> "$SCRIPT_DIR/$VENV_NAME/bin/activate"
+    fi
 elif [ "$OS_TYPE" = "Darwin" ]; then
     echo ">>> Apple Silicon / macOS detected. Installing PyTorch with MPS support..."
-    uv pip install -U --python "$VENV_PYTHON" "torch" "torchvision"
+    uv pip install -U --python "$VENV_PYTHON" "torch"
 else
     echo ">>> Installing CPU PyTorch..."
-    uv pip install -U --python "$VENV_PYTHON" "torch" "torchvision"
+    uv pip install -U --python "$VENV_PYTHON" "torch"
 fi
 
 # Install TRL (with GRPOTrainer support), PEFT, and dependencies

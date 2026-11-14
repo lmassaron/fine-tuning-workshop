@@ -47,25 +47,25 @@ if [ "$HAS_NVIDIA_GPU" = true ]; then
     echo ">>> Detected CUDA Version: $CUDA_VERSION_STRING"
     CUDA_MAJOR=$(echo "$CUDA_VERSION_STRING" | cut -d. -f1)
     CUDA_MINOR=$(echo "$CUDA_VERSION_STRING" | cut -d. -f2)
+    CUDA_MAJOR=${CUDA_MAJOR:-12}
+    CUDA_MINOR=${CUDA_MINOR:-1}
 
-    if [ "$ARCH" = "aarch64" ]; then
+    if [ "$CUDA_MAJOR" -ge 13 ]; then
         PT_CU_VERSION="cu130"
-    else
-        if [ "$CUDA_MAJOR" -ge 13 ]; then
-            PT_CU_VERSION="cu130"
-        elif [ "$CUDA_MAJOR" -eq 12 ]; then
-            if [ "$CUDA_MINOR" -ge 8 ]; then
-                PT_CU_VERSION="cu128"
-            elif [ "$CUDA_MINOR" -ge 4 ]; then
-                PT_CU_VERSION="cu124"
-            elif [ "$CUDA_MINOR" -ge 1 ]; then
-                PT_CU_VERSION="cu121"
-            else
-                PT_CU_VERSION="cu118"
-            fi
+    elif [ "$CUDA_MAJOR" -eq 12 ]; then
+        if [ "$CUDA_MINOR" -ge 8 ]; then
+            PT_CU_VERSION="cu128"
+        elif [ "$CUDA_MINOR" -ge 6 ]; then
+            PT_CU_VERSION="cu126"
+        elif [ "$CUDA_MINOR" -ge 4 ]; then
+            PT_CU_VERSION="cu124"
+        elif [ "$CUDA_MINOR" -ge 1 ]; then
+            PT_CU_VERSION="cu121"
         else
             PT_CU_VERSION="cu118"
         fi
+    else
+        PT_CU_VERSION="cu118"
     fi
 
     echo ">>> Installing PyTorch with CUDA support ($PT_CU_VERSION)..."
@@ -76,7 +76,7 @@ if [ "$HAS_NVIDIA_GPU" = true ]; then
         "torch" "torchvision"
 
     echo ">>> Installing Unsloth for Vision models..."
-    uv pip install -U --python "$VENV_PYTHON" "unsloth" || true
+    UNSLOTH_SKIP_TORCHVISION_CHECK=1 uv pip install -U --python "$VENV_PYTHON" "unsloth" || true
 elif [ "$OS_TYPE" = "Darwin" ]; then
     echo ">>> Apple Silicon / macOS detected. Installing PyTorch with MPS support..."
     uv pip install -U --python "$VENV_PYTHON" "torch" "torchvision"
@@ -115,6 +115,9 @@ echo ">>> Registering Jupyter kernel..."
 "$VENV_PYTHON" -m ipykernel install --user \
     --name "vision-finetuning-latex" \
     --display-name "Python (Vision Fine-Tuning LaTeX)"
+
+# Ensure Unsloth compatibility in venv
+grep -q "UNSLOTH_SKIP_TORCHVISION_CHECK" "$SCRIPT_DIR/$VENV_NAME/bin/activate" 2>/dev/null || echo "export UNSLOTH_SKIP_TORCHVISION_CHECK=1" >> "$SCRIPT_DIR/$VENV_NAME/bin/activate"
 
 echo ""
 echo "✅ Environment setup complete in $SCRIPT_DIR/$VENV_NAME"

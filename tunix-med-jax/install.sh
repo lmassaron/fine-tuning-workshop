@@ -59,7 +59,7 @@ fi
 echo ">>> Installing Tunix, Flax, Transformers and tools..."
 uv pip install -U \
     --python "$VENV_PYTHON" \
-    "tunix" \
+    "google-tunix" \
     "flax" \
     "optax" \
     "transformers" \
