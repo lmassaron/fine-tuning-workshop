@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+if [ -z "$BASH_VERSION" ]; then
+    exec bash "$0" "$@"
+fi
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 # ==============================================================================
 # Installation script for Clinical Cardiology QA Expert (Phi-4 + Unsloth)
 # Purpose: Sets up a dedicated uv virtual environment (.venv) for GPU training

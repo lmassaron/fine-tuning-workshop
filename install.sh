@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+if [ -z "$BASH_VERSION" ]; then
+    exec bash "$0" "$@"
+fi
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 # ==============================================================================
 # Master Installation Dispatcher for Fine-Tuning Workshop
 # Purpose: Allows setting up environments across any or all example tracks
@@ -35,6 +39,10 @@ usage() {
 
 TARGET="${1:-}"
 
+if [ "$TARGET" = "-h" ] || [ "$TARGET" = "--help" ] || [ "$TARGET" = "help" ]; then
+    usage
+fi
+
 if [ -z "$TARGET" ]; then
     echo "=========================================================="
     echo "Fine-Tuning Workshop: Multi-Track Environment Setup"
@@ -60,6 +68,11 @@ if [ -z "$TARGET" ]; then
                 ;;
         esac
     done
+fi
+
+if [ -z "$TARGET" ]; then
+    echo "No track selected. Exiting."
+    exit 0
 fi
 
 install_track() {
