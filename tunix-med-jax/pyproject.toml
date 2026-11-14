@@ -5,7 +5,7 @@ description = "Tunix & JAX Accelerated Medical Cardiology SFT Pipeline"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "jax[cuda12]",
+    "jax",
     "google-tunix",
     "flax",
     "optax",
