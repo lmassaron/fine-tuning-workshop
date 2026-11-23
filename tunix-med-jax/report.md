@@ -1,7 +1,7 @@
 # Technical Report: Analysis of Tunix-Med Fine-Tuning Performance
 
 ## Executive Summary
-The fine-tuned medical model (`08_medical_evaluation_final.ipynb`) shows a negligible improvement in the "Final Score" (0.482 vs 0.477) compared to the baseline (`05_medical_baseline_evaluation.ipynb`). However, a deeper analysis reveals that this is partially due to **inconsistent evaluation metrics** and **significant overfitting** during training.
+The fine-tuned medical model (`04_medical_evaluation_final.ipynb`) shows a negligible improvement in the "Final Score" (0.482 vs 0.477) compared to the baseline (`01_medical_baseline_evaluation.ipynb`). However, a deeper analysis reveals that this is partially due to **inconsistent evaluation metrics** and **significant overfitting** during training.
 
 ## 1. Analysis of Evaluation Metrics
 
@@ -23,7 +23,7 @@ The raw semantic similarity actually **improved** from 0.516 to 0.529, but the r
 - **Perplexity:** Dropped from **30,609,236.4** to **15.4**. The model has successfully learned the distribution of the training data.
 
 ## 2. Training Issues: Overfitting
-The training logs in `07_tunix_sft_training.ipynb` show a massive gap between training loss and evaluation loss:
+The training logs in `03_tunix_sft_training.ipynb` show a massive gap between training loss and evaluation loss:
 - **Final Train Loss:** ~0.29
 - **Best Eval Loss:** ~1.58 (at step 1750)
 - **Final Eval Loss:** ~2.15
@@ -31,7 +31,7 @@ The training logs in `07_tunix_sft_training.ipynb` show a massive gap between tr
 The model began overfitting significantly before the end of the first epoch. 
 
 ### 2.1. Logic Flaw in `CleanProgressHook`
-I discovered a critical bug in the checkpoint saving logic of `07_tunix_sft_training.ipynb`:
+I discovered a critical bug in the checkpoint saving logic of `03_tunix_sft_training.ipynb`:
 ```python
 if should_save:
     if not epoch_done:
@@ -42,7 +42,7 @@ if should_save:
 This logic **overwrites the "best" checkpoint with the latest one** regardless of performance, as long as the first epoch is still in progress. 
 - The evaluation logs show that the true minimum eval loss was reached at **step 1750** (Loss: 1.58).
 - However, because epoch 1 ended at step 2366, the hook continued to overwrite the "best" checkpoint at step 2000 (Loss: 1.69) and step 2250 (Loss: 1.67).
-- Consequently, the model evaluated in notebook 08 was **already significantly overfitted**, explaining the hallucinations and the poor performance.
+- Consequently, the model evaluated in notebook 04 was **already significantly overfitted**, explaining the hallucinations and the poor performance.
 
 ## 3. Behavioral Observations
 - **Conciseness:** The fine-tuned model learned the extremely concise style of the training data (e.g., answering "Atrial fibrillation." instead of a conversational paragraph).

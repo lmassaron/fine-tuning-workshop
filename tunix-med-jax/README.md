@@ -15,13 +15,13 @@ Fine-tuning LLMs with JAX offers substantial throughput advantages over traditio
 
 ## 📂 Pipeline Stages
 
-1. **`05_medical_baseline_evaluation.ipynb`**:
+1. **`01_medical_baseline_evaluation.ipynb`**:
    - Assesses baseline `gemma-3-270M-it` response quality across cardiology questions, establishing baseline perplexity and similarity scores.
-2. **`06_medical_synthetic_data.ipynb`**:
+2. **`02_medical_synthetic_data.ipynb`**:
    - Curates and cleans domain dialogue pairs using `synthetic_data_kit_config.yaml`.
-3. **`07_tunix_sft_training.ipynb`**:
+3. **`03_tunix_sft_training.ipynb`**:
    - Executes LoRA training with Tunix, JAX, and Flax.
-4. **`08_medical_evaluation_final.ipynb`**:
+4. **`04_medical_evaluation_final.ipynb`**:
    - Calculates post-training cardiology metrics, quantifying factual retention and response coherence.
 
 ---
