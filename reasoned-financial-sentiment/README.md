@@ -18,10 +18,14 @@ This project trains smaller student models (`Gemma-3-1B` and `Gemma-4-E2B-it`) t
 
 - **`01_generate_sentiment_explanations.ipynb`**:
   - Leverages a teacher model to distill financial rationale on corporate earnings, revenue growth, and market indicators.
-- **`02_fine_tuning_sentiment.ipynb`**:
+- **`02_fine_tuning_sentiment (a).ipynb`**:
   - Fine-tunes Gemma 3 1B with QLoRA to generate `<reasoning>` and `<sentiment>` tags simultaneously.
-- **`03_sentiment_evaluation.ipynb`**:
-  - Benchmarks classification accuracy, tag integrity, and reasoning validity using LLM-as-a-judge.
+- **`02_fine_tuning_sentiment (b).ipynb`**:
+  - Fine-tunes Gemma 4 E2B-IT with 4-bit QLoRA and TRL `SFTTrainer` for reasoned financial sentiment analysis (CoT).
+- **`03_sentiment_evaluation (a).ipynb`**:
+  - Benchmarks Gemma 3 1B classification accuracy, tag integrity, and reasoning validity using LLM-as-a-judge.
+- **`03_sentiment_evaluation (b).ipynb`**:
+  - Benchmarks Gemma 4 E2B-IT classification accuracy, tag integrity, and reasoning validity using LLM-as-a-judge.
 - **`04_augment_sentiment_data.ipynb`**:
   - Augments the financial sentiment dataset using a teacher model with LLM-as-a-judge verification.
 - **`financial_sentiment_cot.ipynb`**:

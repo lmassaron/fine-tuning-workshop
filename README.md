@@ -56,7 +56,7 @@ Each directory is self-contained. To run an example:
 
 ## Google Colab Free Tier Compatibility
 
-All **20 notebooks** in this repository are designed and benchmarked to run within the hardware constraints of the **Google Colab Free Tier** (equipped with an **NVIDIA T4 GPU** with 15.36 GB VRAM and ~12.7 GB system RAM). Every notebook includes an **Open in Colab** badge at the top for one-click launching.
+All **22 notebooks** in this repository are designed and benchmarked to run within the hardware constraints of the **Google Colab Free Tier** (equipped with an **NVIDIA T4 GPU** with 15.36 GB VRAM and ~12.7 GB system RAM). Every notebook includes an **Open in Colab** badge at the top for one-click launching.
 
 ### Recommended Colab Setup:
 - **Select GPU Runtime**: Go to `Runtime > Change runtime type` and select **T4 GPU** (required for CUDA acceleration, 4-bit quantization, and Unsloth).
@@ -72,8 +72,10 @@ All **20 notebooks** in this repository are designed and benchmarked to run with
 | **1** | [`knowledge-injection-sherlock`](knowledge-injection-sherlock/README.md) | [`03_fine_tuning_QA.ipynb`](knowledge-injection-sherlock/03_fine_tuning_QA.ipynb) | `google/gemma-3-1b-it` | ✅ Supported | ~3.7 GB | QLoRA SFT on Sherlock Holmes domain QA |
 | **1** | [`knowledge-injection-sherlock`](knowledge-injection-sherlock/README.md) | [`04_knowledge_evaluation_final.ipynb`](knowledge-injection-sherlock/04_knowledge_evaluation_final.ipynb) | `gemma-3-1b-sherlock-expert` | ✅ Supported | ~3.7 GB | Comparative post-training evaluation vs baseline |
 | **2** | [`reasoned-financial-sentiment`](reasoned-financial-sentiment/README.md) | [`01_generate_sentiment_explanations.ipynb`](reasoned-financial-sentiment/01_generate_sentiment_explanations.ipynb) | `Qwen/Qwen2.5-7B-Instruct` | ✅ Supported | ~5.5 GB | 4-bit NF4 teacher generation of Chain-of-Thought rationales |
-| **2** | [`reasoned-financial-sentiment`](reasoned-financial-sentiment/README.md) | [`02_fine_tuning_sentiment.ipynb`](reasoned-financial-sentiment/02_fine_tuning_sentiment.ipynb) | `google/gemma-3-1b-it` | ✅ Supported | ~4.0 GB | 4-bit NF4 QLoRA SFT on FinancialPhraseBank |
-| **2** | [`reasoned-financial-sentiment`](reasoned-financial-sentiment/README.md) | [`03_sentiment_evaluation.ipynb`](reasoned-financial-sentiment/03_sentiment_evaluation.ipynb) | Gemma-3-1B + Qwen-7B Judge | ✅ Supported | ~5.5 GB | Strict accuracy and LLM-as-a-judge scoring |
+| **2** | [`reasoned-financial-sentiment`](reasoned-financial-sentiment/README.md) | [`02_fine_tuning_sentiment (a).ipynb`](reasoned-financial-sentiment/02_fine_tuning_sentiment%20(a).ipynb) | `google/gemma-3-1b-it` | ✅ Supported | ~4.0 GB | 4-bit NF4 QLoRA SFT on FinancialPhraseBank (Gemma 3) |
+| **2** | [`reasoned-financial-sentiment`](reasoned-financial-sentiment/README.md) | [`02_fine_tuning_sentiment (b).ipynb`](reasoned-financial-sentiment/02_fine_tuning_sentiment%20(b).ipynb) | `google/gemma-4-E2B-it` | ✅ Supported | ~8.9 GB | 4-bit NF4 QLoRA SFT on FinancialPhraseBank (Gemma 4 CoT) |
+| **2** | [`reasoned-financial-sentiment`](reasoned-financial-sentiment/README.md) | [`03_sentiment_evaluation (a).ipynb`](reasoned-financial-sentiment/03_sentiment_evaluation%20(a).ipynb) | Gemma-3-1B + Qwen-7B Judge | ✅ Supported | ~5.5 GB | Strict accuracy and LLM-as-a-judge scoring (Gemma 3) |
+| **2** | [`reasoned-financial-sentiment`](reasoned-financial-sentiment/README.md) | [`03_sentiment_evaluation (b).ipynb`](reasoned-financial-sentiment/03_sentiment_evaluation%20(b).ipynb) | Gemma-4-E2B + Qwen-7B Judge | ✅ Supported | ~5.5 GB | Strict accuracy and LLM-as-a-judge scoring (Gemma 4 CoT) |
 | **2** | [`reasoned-financial-sentiment`](reasoned-financial-sentiment/README.md) | [`04_augment_sentiment_data.ipynb`](reasoned-financial-sentiment/04_augment_sentiment_data.ipynb) | `Qwen/Qwen2.5-7B-Instruct` | ✅ Supported | ~5.5 GB | Dataset augmentation with judge verification |
 | **2** | [`reasoned-financial-sentiment`](reasoned-financial-sentiment/README.md) | [`financial_sentiment_cot.ipynb`](reasoned-financial-sentiment/financial_sentiment_cot.ipynb) | `google/gemma-4-E2B-it` / 1B | ✅ Supported | ~8.9 GB | Complete unified end-to-end sentiment classification with CoT |
 | **3** | [`tunix-med-jax`](tunix-med-jax/README.md) | [`01_medical_baseline_evaluation.ipynb`](tunix-med-jax/01_medical_baseline_evaluation.ipynb) | `google/gemma-3-270m-it` | ✅ Supported | ~0.5 GB | Baseline cardiology knowledge evaluation |
@@ -117,7 +119,7 @@ The table below details hardware compatibility (NVIDIA GPU vs Apple Silicon MPS)
 - **NVIDIA GPU (CUDA)**: Full support across all 11 tracks. Supports 4-bit bitsandbytes quantization, flash-attention, fused optimizers, and Unsloth acceleration. Recommended 16GB+ VRAM (RTX 3090/4080/4090, A10, L4, A100, H100, GB10/GH200). Scripts auto-detect CUDA 11.8, 12.1, 12.4, 12.8, and 13.0 on `x86_64` and `aarch64`.
 - **Apple Silicon (MPS)**: Supported across all pure Hugging Face / PyTorch / JAX tracks (Tracks 1, 2, 3, 8, 9, and 11). Tracks gracefully fall back to native half-precision (`bfloat16`/`float16`) to leverage Apple Silicon unified memory without bitsandbytes CUDA constraints.
 - **Unsloth Tracks (GPU Only)**: Tracks 4, 5, 6, 7, and 10 rely on Unsloth custom CUDA / Triton kernels and require an NVIDIA GPU.
-- **Google Colab**: Free-tier T4 and L4 runtimes are supported across all 20 notebooks using 4-bit NormalFloat (NF4) quantization and compact base models (270M–3.8B).
+- **Google Colab**: Free-tier T4 and L4 runtimes are supported across all 22 notebooks using 4-bit NormalFloat (NF4) quantization and compact base models (270M–3.8B).
 
 ---
 
